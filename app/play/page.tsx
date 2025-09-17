@@ -132,44 +132,121 @@ function SwipeCard({
   sectorLabel?: string;
 }) {
   const [deltaX, setDeltaX] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [swipeIntent, setSwipeIntent] = useState<"reject" | "keep" | null>(null);
+  const [dragDirection, setDragDirection] = useState<"reject" | "keep" | null>(null);
   const pointerStart = useRef<number | null>(null);
-  const active = useRef(false);
+  const animationTimer = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (animationTimer.current) {
+        clearTimeout(animationTimer.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    setDeltaX(0);
+    setSwipeIntent(null);
+    setDragDirection(null);
+    setIsDragging(false);
+    pointerStart.current = null;
+  }, [product.id]);
+
+  const triggerSwipe = useCallback(
+    (direction: "reject" | "keep") => {
+      if (disabled || swipeIntent) return;
+      setSwipeIntent(direction);
+      setDragDirection(direction);
+      setIsDragging(false);
+      pointerStart.current = null;
+      const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 520;
+      const exitOffset = direction === "keep" ? viewportWidth + 180 : -viewportWidth - 180;
+      setDeltaX(exitOffset);
+      if (animationTimer.current) {
+        clearTimeout(animationTimer.current);
+      }
+      const callback = direction === "keep" ? onKeep : onReject;
+      animationTimer.current = setTimeout(() => {
+        callback();
+        setSwipeIntent(null);
+        setDeltaX(0);
+        setDragDirection(null);
+        animationTimer.current = null;
+      }, 320);
+    },
+    [disabled, onKeep, onReject, swipeIntent]
+  );
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (disabled) return;
+    if (disabled || swipeIntent) return;
     pointerStart.current = event.clientX;
-    active.current = true;
-    (event.target as HTMLElement).setPointerCapture(event.pointerId);
+    setIsDragging(true);
+    setDragDirection(null);
+    (event.target as HTMLElement).setPointerCapture?.(event.pointerId);
   };
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!active.current || pointerStart.current === null) return;
-    setDeltaX(event.clientX - pointerStart.current);
-  };
-
-  const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!active.current || pointerStart.current === null) return;
+    if (!isDragging || pointerStart.current === null || swipeIntent) return;
     const delta = event.clientX - pointerStart.current;
-    pointerStart.current = null;
-    active.current = false;
-    setDeltaX(0);
-    if (delta > 80) {
-      onKeep();
-    } else if (delta < -80) {
-      onReject();
+    setDeltaX(delta);
+    if (delta > 24) {
+      setDragDirection("keep");
+    } else if (delta < -24) {
+      setDragDirection("reject");
+    } else {
+      setDragDirection(null);
     }
   };
 
+  const handlePointerEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!isDragging || pointerStart.current === null) return;
+    const delta = event.clientX - pointerStart.current;
+    (event.target as HTMLElement).releasePointerCapture?.(event.pointerId);
+    pointerStart.current = null;
+    setIsDragging(false);
+    const cardElement = event.currentTarget;
+    const cardWidth = cardElement.getBoundingClientRect().width || 0;
+    const viewportWidth = typeof window !== "undefined" ? window.innerWidth : cardWidth;
+    const swipeThreshold = Math.max(cardWidth * 0.75, viewportWidth * 0.4);
+    if (delta > swipeThreshold) {
+      triggerSwipe("keep");
+      return;
+    }
+    if (delta < -swipeThreshold) {
+      triggerSwipe("reject");
+      return;
+    }
+    setDeltaX(0);
+    setDragDirection(null);
+  };
+
   const price = product.variants?.[0]?.price;
+  const lift = -Math.min(32, Math.abs(deltaX) * 0.12);
+  const twist = Math.max(-16, Math.min(16, deltaX / 16));
+  const tilt = Math.max(-14, Math.min(14, deltaX / 10));
+  const cardTransform = swipeIntent
+    ? undefined
+    : `translate3d(${deltaX}px, ${lift}px, 0) rotateZ(${twist}deg) rotateY(${tilt}deg)`;
 
   return (
     <div
-      className={`${styles.productCard} ${disabled ? styles.cardDisabled : ""}`}
+      className={[
+        styles.productCard,
+        disabled ? styles.cardDisabled : "",
+        isDragging ? styles.cardDragging : "",
+        swipeIntent ? styles.cardSwiping : "",
+      ].join(" ")}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerUp}
-      style={{ transform: `translateX(${deltaX}px) rotate(${deltaX / 25}deg)` }}
+      onPointerUp={handlePointerEnd}
+      onPointerCancel={handlePointerEnd}
+      onPointerLeave={(event) => {
+        if (!isDragging) return;
+        handlePointerEnd(event);
+      }}
+      style={cardTransform ? { transform: cardTransform } : undefined}
     >
       <div className={styles.productImageWrap}>
         <img
@@ -184,24 +261,42 @@ function SwipeCard({
         <div className={styles.priceTag}>{formatCurrency(price?.amount, price?.currencyCode)}</div>
       </div>
       <div className={styles.swipeOverlay}>
-        <button
-          type="button"
-          className={`${styles.controlButton} ${styles.reject}`}
-          onClick={onReject}
-          disabled={disabled}
-          aria-label="Rifiuta prodotto"
+        <div
+          className={[
+            styles.controlGroup,
+            dragDirection === "reject" ? styles.controlGroupActive : "",
+            swipeIntent === "reject" ? styles.controlGroupFlash : "",
+          ].join(" ")}
         >
-          ✕
-        </button>
-        <button
-          type="button"
-          className={`${styles.controlButton} ${styles.keep}`}
-          onClick={onKeep}
-          disabled={disabled}
-          aria-label="Aggiungi al carrello"
+          <button
+            type="button"
+            className={`${styles.controlButton} ${styles.reject}`}
+            onClick={() => triggerSwipe("reject")}
+            disabled={disabled}
+            aria-label="Rifiuta prodotto"
+          >
+            ✕
+          </button>
+          <span className={styles.penaltyTag}>- {REJECT_PENALTY_SECONDS}s</span>
+        </div>
+        <div
+          className={[
+            styles.controlGroup,
+            dragDirection === "keep" ? styles.controlGroupActive : "",
+            swipeIntent === "keep" ? styles.controlGroupFlash : "",
+          ].join(" ")}
         >
-          ❤
-        </button>
+          <button
+            type="button"
+            className={`${styles.controlButton} ${styles.keep}`}
+            onClick={() => triggerSwipe("keep")}
+            disabled={disabled}
+            aria-label="Aggiungi al carrello"
+          >
+            ❤
+          </button>
+          <span className={styles.penaltyTag}>- {KEEP_PENALTY_SECONDS}s</span>
+        </div>
       </div>
     </div>
   );
@@ -515,7 +610,7 @@ export default function PlayPage() {
         <div className={styles.stepCard}>
           <h1 className={styles.introTitle}>All You Can Makeup</h1>
           <p className={styles.introCopy}>
-            Il tuo limite sarà solo il tempo: tutto quello che metterai nel carrello sarà tuo!
+            Il tuo limite è solo il tempo, tutto quello che riuscirai a mettere nel carrello sarà tuo.
           </p>
           <button type="button" className={styles.glowButton} onClick={() => setStage("ticket")}>GIOCA</button>
         </div>
@@ -631,28 +726,37 @@ export default function PlayPage() {
 
       {stage === "playing" && activeTier && (
         <div className={styles.playground}>
-          <header className={styles.playHeader}>
-            <div className={styles.badges}>
-              <span className={styles.tierBadge}>{activeTier.label}</span>
-              <span className={styles.infoBadge}>Valore carrello {formatCurrency(totalValue)}</span>
-              <span className={styles.infoBadge}>{keptProducts.length} prodotti</span>
-            </div>
+          <div className={styles.timerWrap}>
+            <span className={styles.tierRibbon}>{activeTier.label}</span>
             <TimerBar total={activeTier.secs} left={secondsLeft} />
-          </header>
+          </div>
 
-          <div className={styles.playBody}>
-            {isFetching && !currentProduct ? (
-              <div className={styles.loader}>Caricamento prodotti…</div>
-            ) : null}
-            {currentProduct ? (
-              <SwipeCard
-                product={currentProduct}
-                disabled={secondsLeft <= 0}
-                onReject={handleReject}
-                onKeep={handleKeep}
-                sectorLabel={currentSectorLabel}
-              />
-            ) : null}
+          <div className={styles.playStage}>
+            <div className={`${styles.sideStat} ${styles.sideStatLeft}`}>
+              <span className={styles.statLabel}>Valore carrello</span>
+              <span className={styles.statValue}>{formatCurrency(totalValue)}</span>
+            </div>
+
+            <div className={styles.playBody}>
+              {isFetching && !currentProduct ? (
+                <div className={styles.loader}>Caricamento prodotti…</div>
+              ) : null}
+              {currentProduct ? (
+                <SwipeCard
+                  key={currentProduct.id}
+                  product={currentProduct}
+                  disabled={secondsLeft <= 0}
+                  onReject={handleReject}
+                  onKeep={handleKeep}
+                  sectorLabel={currentSectorLabel}
+                />
+              ) : null}
+            </div>
+
+            <div className={`${styles.sideStat} ${styles.sideStatRight}`}>
+              <span className={styles.statLabel}>Prodotti</span>
+              <span className={styles.statValue}>{keptProducts.length}</span>
+            </div>
           </div>
         </div>
       )}
