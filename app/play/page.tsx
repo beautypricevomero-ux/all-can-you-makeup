@@ -515,7 +515,7 @@ export default function PlayPage() {
         <div className={styles.stepCard}>
           <h1 className={styles.introTitle}>All You Can Makeup</h1>
           <p className={styles.introCopy}>
-            Il tuo limite sarà solo il tempo: tutto quello che metterai nel carrello sarà tuo!
+            Il tuo limite è solo il tempo, tutto quello che riuscirai a mettere nel carrello sarà tuo.
           </p>
           <button type="button" className={styles.glowButton} onClick={() => setStage("ticket")}>GIOCA</button>
         </div>
