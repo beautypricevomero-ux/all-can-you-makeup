@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
 import styles from "./page.module.css";
 
 type Tier = { id: string; label: string; fee: number; secs: number };
@@ -131,77 +130,142 @@ function SwipeCard({
   onKeep: () => void;
   sectorLabel?: string;
 }) {
-  const [deltaX, setDeltaX] = useState(0);
-  const pointerStart = useRef<number | null>(null);
-  const active = useRef(false);
+  const [animation, setAnimation] = useState<"reject" | "keep" | null>(null);
+  const [isDescriptionOpen, setIsDescriptionOpen] = useState(false);
+  const animationTimer = useRef<NodeJS.Timeout | null>(null);
 
-  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (disabled) return;
-    pointerStart.current = event.clientX;
-    active.current = true;
-    (event.target as HTMLElement).setPointerCapture(event.pointerId);
-  };
+  useEffect(() => {
+    return () => {
+      if (animationTimer.current) {
+        clearTimeout(animationTimer.current);
+      }
+    };
+  }, []);
 
-  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!active.current || pointerStart.current === null) return;
-    setDeltaX(event.clientX - pointerStart.current);
-  };
-
-  const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!active.current || pointerStart.current === null) return;
-    const delta = event.clientX - pointerStart.current;
-    pointerStart.current = null;
-    active.current = false;
-    setDeltaX(0);
-    if (delta > 80) {
-      onKeep();
-    } else if (delta < -80) {
-      onReject();
+  useEffect(() => {
+    if (animationTimer.current) {
+      clearTimeout(animationTimer.current);
+      animationTimer.current = null;
     }
-  };
+    setAnimation(null);
+    setIsDescriptionOpen(false);
+  }, [product.id]);
+
+  const triggerAction = useCallback(
+    (type: "reject" | "keep") => {
+      if (disabled || animation) return;
+      if (animationTimer.current) {
+        clearTimeout(animationTimer.current);
+      }
+      setAnimation(type);
+      const callback = type === "keep" ? onKeep : onReject;
+      const duration = type === "keep" ? 450 : 550;
+      animationTimer.current = setTimeout(() => {
+        callback();
+        setAnimation(null);
+        animationTimer.current = null;
+      }, duration);
+    },
+    [animation, disabled, onKeep, onReject]
+  );
 
   const price = product.variants?.[0]?.price;
+  const locationLabel = sectorLabel ?? "In evidenza";
+  const isAnimating = animation !== null;
+  const descriptionCopy =
+    product.description?.trim() || "Scopri tutti i dettagli sul nostro catalogo.";
+  const descriptionId = `product-desc-${product.id}`;
+
+  const cardClassName = [
+    styles.productCard,
+    disabled ? styles.cardDisabled : "",
+    animation === "reject" ? styles.cardRejecting : "",
+    animation === "keep" ? styles.cardKeeping : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const toggleDescription = useCallback(() => {
+    setIsDescriptionOpen((prev) => !prev);
+  }, []);
 
   return (
-    <div
-      className={`${styles.productCard} ${disabled ? styles.cardDisabled : ""}`}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerUp}
-      style={{ transform: `translateX(${deltaX}px) rotate(${deltaX / 25}deg)` }}
-    >
-      <div className={styles.productImageWrap}>
-        <img
-          src={product.images?.[0]?.url || "https://picsum.photos/seed/makeup/720/720"}
-          alt={product.images?.[0]?.altText || product.title}
-        />
-        {sectorLabel ? <span className={styles.sectorBadge}>{sectorLabel}</span> : null}
+    <div className={styles.cardStage}>
+      <div className={cardClassName}>
+        <div className={styles.cardAura} aria-hidden="true" />
+        <div className={styles.cardInterior}>
+          <div className={styles.cardHeader}>
+            <span className={styles.cardLocation}>
+              <span className={styles.locationDot} aria-hidden="true" />
+              {locationLabel}
+            </span>
+            <div className={styles.cardHeaderIcons} aria-hidden="true">
+              <span className={styles.cardHeaderIcon}>★</span>
+              <span className={styles.cardHeaderIcon}>⋯</span>
+            </div>
+          </div>
+          <div className={styles.productImageWrap}>
+            <img
+              src={product.images?.[0]?.url || "https://picsum.photos/seed/makeup/720/720"}
+              alt={product.images?.[0]?.altText || product.title}
+            />
+          </div>
+          <div className={styles.productBody}>
+            <h2>
+              <button
+                type="button"
+                className={`${styles.productTitleButton} ${
+                  isDescriptionOpen ? styles.productTitleOpen : ""
+                }`}
+                onClick={toggleDescription}
+                aria-expanded={isDescriptionOpen}
+                aria-controls={descriptionId}
+              >
+                <span>{product.title}</span>
+                <span aria-hidden="true" className={styles.productTitleIcon}>
+                  {isDescriptionOpen ? "▴" : "▾"}
+                </span>
+              </button>
+            </h2>
+            <div
+              className={`${styles.productDescription} ${
+                isDescriptionOpen ? styles.descriptionOpen : ""
+              }`}
+              id={descriptionId}
+            >
+              <p>{descriptionCopy}</p>
+            </div>
+            <div className={styles.priceTag}>{formatCurrency(price?.amount, price?.currencyCode)}</div>
+          </div>
+        </div>
       </div>
-      <div className={styles.productBody}>
-        <h2>{product.title}</h2>
-        <p>{product.description || "Scopri tutti i dettagli sul nostro catalogo."}</p>
-        <div className={styles.priceTag}>{formatCurrency(price?.amount, price?.currencyCode)}</div>
-      </div>
-      <div className={styles.swipeOverlay}>
-        <button
-          type="button"
-          className={`${styles.controlButton} ${styles.reject}`}
-          onClick={onReject}
-          disabled={disabled}
-          aria-label="Rifiuta prodotto"
-        >
-          ✕
-        </button>
-        <button
-          type="button"
-          className={`${styles.controlButton} ${styles.keep}`}
-          onClick={onKeep}
-          disabled={disabled}
-          aria-label="Aggiungi al carrello"
-        >
-          ❤
-        </button>
+      <div className={styles.controlDock}>
+        <div className={styles.controlGroup}>
+          <span className={styles.controlPenalty}>- {REJECT_PENALTY_SECONDS}s</span>
+          <button
+            type="button"
+            className={`${styles.controlButton} ${styles.controlReject}`}
+            onClick={() => triggerAction("reject")}
+            disabled={disabled || isAnimating}
+            aria-label="Scarta prodotto"
+          >
+            <span aria-hidden="true" className={styles.controlIcon}>✕</span>
+          </button>
+          <span className={styles.controlLabel}>Scarta</span>
+        </div>
+        <div className={styles.controlGroup}>
+          <span className={styles.controlPenalty}>- {KEEP_PENALTY_SECONDS}s</span>
+          <button
+            type="button"
+            className={`${styles.controlButton} ${styles.controlKeep}`}
+            onClick={() => triggerAction("keep")}
+            disabled={disabled || isAnimating}
+            aria-label="Aggiungi al carrello"
+          >
+            <span aria-hidden="true" className={styles.controlIcon}>❤</span>
+          </button>
+          <span className={styles.controlLabel}>Aggiungi</span>
+        </div>
       </div>
     </div>
   );
@@ -515,7 +579,7 @@ export default function PlayPage() {
         <div className={styles.stepCard}>
           <h1 className={styles.introTitle}>All You Can Makeup</h1>
           <p className={styles.introCopy}>
-            Il tuo limite sarà solo il tempo: tutto quello che metterai nel carrello sarà tuo!
+            Il tuo limite è solo il tempo, tutto quello che riuscirai a mettere nel carrello sarà tuo.
           </p>
           <button type="button" className={styles.glowButton} onClick={() => setStage("ticket")}>GIOCA</button>
         </div>
@@ -631,28 +695,38 @@ export default function PlayPage() {
 
       {stage === "playing" && activeTier && (
         <div className={styles.playground}>
-          <header className={styles.playHeader}>
-            <div className={styles.badges}>
-              <span className={styles.tierBadge}>{activeTier.label}</span>
-              <span className={styles.infoBadge}>Valore carrello {formatCurrency(totalValue)}</span>
-              <span className={styles.infoBadge}>{keptProducts.length} prodotti</span>
+          <header className={styles.stageHeader}>
+            <div className={styles.timerWrap}>
+              <TimerBar total={activeTier.secs} left={secondsLeft} />
+              <div className={styles.timerStats}>
+                <div className={styles.timerStat}>
+                  <span className={styles.statLabel}>Valore carrello</span>
+                  <span className={styles.statValue}>{formatCurrency(totalValue)}</span>
+                </div>
+                <div className={styles.timerStat}>
+                  <span className={styles.statLabel}>Prodotti</span>
+                  <span className={styles.statValue}>{keptProducts.length}</span>
+                </div>
+              </div>
             </div>
-            <TimerBar total={activeTier.secs} left={secondsLeft} />
           </header>
 
-          <div className={styles.playBody}>
-            {isFetching && !currentProduct ? (
-              <div className={styles.loader}>Caricamento prodotti…</div>
-            ) : null}
-            {currentProduct ? (
-              <SwipeCard
-                product={currentProduct}
-                disabled={secondsLeft <= 0}
-                onReject={handleReject}
-                onKeep={handleKeep}
-                sectorLabel={currentSectorLabel}
-              />
-            ) : null}
+          <div className={styles.playStage}>
+            <div className={styles.playBody}>
+              {isFetching && !currentProduct ? (
+                <div className={styles.loader}>Caricamento prodotti…</div>
+              ) : null}
+              {currentProduct ? (
+                <SwipeCard
+                  key={currentProduct.id}
+                  product={currentProduct}
+                  disabled={secondsLeft <= 0}
+                  onReject={handleReject}
+                  onKeep={handleKeep}
+                  sectorLabel={currentSectorLabel}
+                />
+              ) : null}
+            </div>
           </div>
         </div>
       )}
