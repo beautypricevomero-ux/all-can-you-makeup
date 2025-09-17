@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
 import styles from "./page.module.css";
 
 type Tier = { id: string; label: string; fee: number; secs: number };
@@ -131,46 +130,56 @@ function SwipeCard({
   onKeep: () => void;
   sectorLabel?: string;
 }) {
-  const [deltaX, setDeltaX] = useState(0);
-  const pointerStart = useRef<number | null>(null);
-  const active = useRef(false);
+  const [animation, setAnimation] = useState<"reject" | "keep" | null>(null);
+  const animationTimer = useRef<NodeJS.Timeout | null>(null);
 
-  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (disabled) return;
-    pointerStart.current = event.clientX;
-    active.current = true;
-    (event.target as HTMLElement).setPointerCapture(event.pointerId);
-  };
+  useEffect(() => {
+    return () => {
+      if (animationTimer.current) {
+        clearTimeout(animationTimer.current);
+      }
+    };
+  }, []);
 
-  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!active.current || pointerStart.current === null) return;
-    setDeltaX(event.clientX - pointerStart.current);
-  };
-
-  const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!active.current || pointerStart.current === null) return;
-    const delta = event.clientX - pointerStart.current;
-    pointerStart.current = null;
-    active.current = false;
-    setDeltaX(0);
-    if (delta > 80) {
-      onKeep();
-    } else if (delta < -80) {
-      onReject();
+  useEffect(() => {
+    if (animationTimer.current) {
+      clearTimeout(animationTimer.current);
+      animationTimer.current = null;
     }
-  };
+    setAnimation(null);
+  }, [product.id]);
+
+  const triggerAction = useCallback(
+    (type: "reject" | "keep") => {
+      if (disabled || animation) return;
+      if (animationTimer.current) {
+        clearTimeout(animationTimer.current);
+      }
+      setAnimation(type);
+      const callback = type === "keep" ? onKeep : onReject;
+      const duration = type === "keep" ? 450 : 550;
+      animationTimer.current = setTimeout(() => {
+        callback();
+        setAnimation(null);
+        animationTimer.current = null;
+      }, duration);
+    },
+    [animation, disabled, onKeep, onReject]
+  );
 
   const price = product.variants?.[0]?.price;
+  const isAnimating = animation !== null;
 
   return (
     <div
-      className={`${styles.productCard} ${disabled ? styles.cardDisabled : ""}`}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerUp}
-      style={{ transform: `translateX(${deltaX}px) rotate(${deltaX / 25}deg)` }}
+      className={[
+        styles.productCard,
+        disabled ? styles.cardDisabled : "",
+        animation === "reject" ? styles.cardRejecting : "",
+        animation === "keep" ? styles.cardKeeping : "",
+      ].join(" ")}
     >
+      <div className={styles.cardAura} aria-hidden="true" />
       <div className={styles.productImageWrap}>
         <img
           src={product.images?.[0]?.url || "https://picsum.photos/seed/makeup/720/720"}
@@ -183,25 +192,35 @@ function SwipeCard({
         <p>{product.description || "Scopri tutti i dettagli sul nostro catalogo."}</p>
         <div className={styles.priceTag}>{formatCurrency(price?.amount, price?.currencyCode)}</div>
       </div>
-      <div className={styles.swipeOverlay}>
-        <button
-          type="button"
-          className={`${styles.controlButton} ${styles.reject}`}
-          onClick={onReject}
-          disabled={disabled}
-          aria-label="Rifiuta prodotto"
-        >
-          ✕
-        </button>
-        <button
-          type="button"
-          className={`${styles.controlButton} ${styles.keep}`}
-          onClick={onKeep}
-          disabled={disabled}
-          aria-label="Aggiungi al carrello"
-        >
-          ❤
-        </button>
+      <div className={styles.actionBar}>
+        <div className={styles.actionGroup}>
+          <span className={styles.penaltyTag}>- {REJECT_PENALTY_SECONDS}s</span>
+          <button
+            type="button"
+            className={`${styles.actionButton} ${styles.reject}`}
+            onClick={() => triggerAction("reject")}
+            disabled={disabled || isAnimating}
+          >
+            <span aria-hidden="true" className={styles.buttonIcon}>
+              ✕
+            </span>
+            <span className={styles.buttonLabel}>Scarta</span>
+          </button>
+        </div>
+        <div className={styles.actionGroup}>
+          <span className={styles.penaltyTag}>- {KEEP_PENALTY_SECONDS}s</span>
+          <button
+            type="button"
+            className={`${styles.actionButton} ${styles.keep}`}
+            onClick={() => triggerAction("keep")}
+            disabled={disabled || isAnimating}
+          >
+            <span aria-hidden="true" className={styles.buttonIcon}>
+              ❤
+            </span>
+            <span className={styles.buttonLabel}>Aggiungi</span>
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -515,7 +534,7 @@ export default function PlayPage() {
         <div className={styles.stepCard}>
           <h1 className={styles.introTitle}>All You Can Makeup</h1>
           <p className={styles.introCopy}>
-            Il tuo limite sarà solo il tempo: tutto quello che metterai nel carrello sarà tuo!
+            Il tuo limite è solo il tempo, tutto quello che riuscirai a mettere nel carrello sarà tuo.
           </p>
           <button type="button" className={styles.glowButton} onClick={() => setStage("ticket")}>GIOCA</button>
         </div>
@@ -631,28 +650,38 @@ export default function PlayPage() {
 
       {stage === "playing" && activeTier && (
         <div className={styles.playground}>
-          <header className={styles.playHeader}>
-            <div className={styles.badges}>
-              <span className={styles.tierBadge}>{activeTier.label}</span>
-              <span className={styles.infoBadge}>Valore carrello {formatCurrency(totalValue)}</span>
-              <span className={styles.infoBadge}>{keptProducts.length} prodotti</span>
-            </div>
+          <div className={styles.timerWrap}>
+            <span className={styles.tierRibbon}>{activeTier.label}</span>
             <TimerBar total={activeTier.secs} left={secondsLeft} />
-          </header>
+          </div>
 
-          <div className={styles.playBody}>
-            {isFetching && !currentProduct ? (
-              <div className={styles.loader}>Caricamento prodotti…</div>
-            ) : null}
-            {currentProduct ? (
-              <SwipeCard
-                product={currentProduct}
-                disabled={secondsLeft <= 0}
-                onReject={handleReject}
-                onKeep={handleKeep}
-                sectorLabel={currentSectorLabel}
-              />
-            ) : null}
+          <div className={styles.playStage}>
+            <div className={styles.statColumn}>
+              <div className={`${styles.sideStat} ${styles.statAccent}`}>
+                <span className={styles.statLabel}>Valore carrello</span>
+                <span className={styles.statValue}>{formatCurrency(totalValue)}</span>
+              </div>
+              <div className={`${styles.sideStat} ${styles.statSoft}`}>
+                <span className={styles.statLabel}>Prodotti</span>
+                <span className={styles.statValue}>{keptProducts.length}</span>
+              </div>
+            </div>
+
+            <div className={styles.playBody}>
+              {isFetching && !currentProduct ? (
+                <div className={styles.loader}>Caricamento prodotti…</div>
+              ) : null}
+              {currentProduct ? (
+                <SwipeCard
+                  key={currentProduct.id}
+                  product={currentProduct}
+                  disabled={secondsLeft <= 0}
+                  onReject={handleReject}
+                  onKeep={handleKeep}
+                  sectorLabel={currentSectorLabel}
+                />
+              ) : null}
+            </div>
           </div>
         </div>
       )}
