@@ -26,6 +26,14 @@ type ActionToast = {
 type CheckoutFormData = { name: string; email: string; cardNumber: string; expiry: string; cvv: string };
 type CheckoutState = "idle" | "processing" | "error";
 type ShippingForm = { fullName: string; address: string; city: string; zip: string; notes: string };
+type PriceGuide = { preferred: number; fallback: number; floor: number };
+
+type PriceGuideInput = {
+  limit: number;
+  cartValue: number;
+  secondsLeft: number;
+  totalSeconds: number;
+};
 
 const REJECT_PENALTY_SECONDS = 10;
 const KEEP_PENALTY_SECONDS = 30;
@@ -47,6 +55,25 @@ function formatCurrency(value: number | string | undefined, currencyCode = "EUR"
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function createPriceGuide({ limit, cartValue, secondsLeft, totalSeconds }: PriceGuideInput): PriceGuide {
+  const safeLimit = limit > 0 ? limit : 1;
+  const remaining = limit - cartValue;
+  const timeRatio = totalSeconds > 0 ? secondsLeft / totalSeconds : 0;
+  const spendProgress = limit > 0 ? cartValue / limit : 0;
+  const idealProgress = 1 - timeRatio;
+  const paceDelta = clamp(spendProgress - idealProgress, -1, 1);
+  const baseAllowance = Math.max(remaining, 0);
+  const timeAllowance = safeLimit * (0.1 + (1 - timeRatio) * 0.15);
+  const correction =
+    paceDelta >= 0 ? -safeLimit * paceDelta * 0.4 : safeLimit * Math.abs(paceDelta) * 0.28;
+  const preferredRaw = baseAllowance + timeAllowance + correction;
+  const preferred = Math.max(safeLimit * 0.06, preferredRaw);
+  const fallback = Math.max(preferred + safeLimit * (0.12 + timeRatio * 0.05), safeLimit * 0.18);
+  const floorBase = Math.max(0, Math.min(safeLimit * 0.2, baseAllowance * 0.6 + safeLimit * 0.04));
+  const floor = Math.min(floorBase, preferred);
+  return { preferred, fallback: Math.max(fallback, preferred + safeLimit * 0.05), floor };
 }
 
 function parsePrice(product: Product): number {
@@ -98,17 +125,40 @@ function selectNextProduct(
   pool: Product[],
   pickedIds: string[],
   sectors: Sector[],
-  maxPrice?: number
+  guide?: PriceGuide
 ) {
   const available = pool.filter((item) => !pickedIds.includes(item.id));
   if (available.length === 0) return null;
   let candidatePool = available;
-  if (typeof maxPrice === "number") {
-    const filtered = available.filter((item) => parsePrice(item) <= maxPrice + 1e-2);
-    if (filtered.length === 0) {
-      return null;
+  if (guide) {
+    const floorThreshold = Math.max(0, guide.floor - 1e-2);
+    const priced = available
+      .map((item) => ({ item, price: parsePrice(item) }))
+      .sort((a, b) => a.price - b.price);
+    const withinPreferred = priced.filter(
+      ({ price }) => price >= floorThreshold && price <= guide.preferred + 1e-2
+    );
+    if (withinPreferred.length > 0) {
+      candidatePool = withinPreferred.map((entry) => entry.item);
+    } else {
+      const withinFallback = priced.filter(
+        ({ price }) => price >= floorThreshold && price <= guide.fallback + 1e-2
+      );
+      if (withinFallback.length > 0) {
+        withinFallback.sort(
+          (a, b) =>
+            Math.abs(a.price - guide.preferred) - Math.abs(b.price - guide.preferred)
+        );
+        const trimmed = withinFallback.slice(0, Math.max(1, Math.ceil(withinFallback.length * 0.6)));
+        candidatePool = trimmed.map((entry) => entry.item);
+      } else {
+        const sliceCount = Math.max(1, Math.ceil(priced.length * 0.4));
+        const trimmed = priced
+          .filter(({ price }) => price >= floorThreshold)
+          .slice(0, sliceCount);
+        candidatePool = trimmed.length > 0 ? trimmed.map((entry) => entry.item) : available;
+      }
     }
-    candidatePool = filtered;
   }
   if (candidatePool.length === 0) return null;
   if (sectors.length === 0) return candidatePool[0];
@@ -463,7 +513,13 @@ export default function PlayPage() {
         const products: Product[] = data.products ?? [];
         setPool(products);
         setBonusProductIds(selectBonusProductIds(products));
-        const next = selectNextProduct(products, [], sectors, limit);
+        const priceGuide = createPriceGuide({
+          limit,
+          cartValue: 0,
+          secondsLeft: tier.secs,
+          totalSeconds: tier.secs,
+        });
+        const next = selectNextProduct(products, [], sectors, priceGuide);
         if (next) {
           setCurrentProduct(next);
         } else {
@@ -566,8 +622,14 @@ export default function PlayPage() {
     const sectors = settings.sectorsByTier[activeTier.id] ?? [];
     const nextPicked = [...pickedIds, currentProduct.id];
     setPickedIds(nextPicked);
-    const remainingBudget = Math.max(0, valueLimit - cartValue);
-    const nextProduct = selectNextProduct(pool, nextPicked, sectors, remainingBudget);
+    const projectedSeconds = Math.max(0, secondsLeft - REJECT_PENALTY_SECONDS);
+    const priceGuide = createPriceGuide({
+      limit: valueLimit,
+      cartValue,
+      secondsLeft: projectedSeconds,
+      totalSeconds: activeTier.secs,
+    });
+    const nextProduct = selectNextProduct(pool, nextPicked, sectors, priceGuide);
     if (nextProduct) {
       setCurrentProduct(nextProduct);
     } else {
@@ -579,7 +641,19 @@ export default function PlayPage() {
       showActionToast("reject", penalty, next);
       return next;
     });
-  }, [settings, activeTier, currentProduct, stage, pickedIds, valueLimit, cartValue, pool, finishRound, showActionToast]);
+  }, [
+    settings,
+    activeTier,
+    currentProduct,
+    stage,
+    pickedIds,
+    valueLimit,
+    cartValue,
+    pool,
+    finishRound,
+    showActionToast,
+    secondsLeft,
+  ]);
 
   const handleKeep = useCallback(() => {
     if (!settings || !activeTier || !currentProduct || stage !== "playing") return;
@@ -591,13 +665,16 @@ export default function PlayPage() {
     const nextPicked = [...pickedIds, currentProduct.id];
     setPickedIds(nextPicked);
     setKeptProducts((prev) => [...prev, currentProduct]);
-    let updatedCartValue = cartValue;
-    setCartValue((prev) => {
-      updatedCartValue = Number((prev + productPrice).toFixed(2));
-      return updatedCartValue;
+    const updatedCartValue = Number((cartValue + productPrice).toFixed(2));
+    setCartValue(updatedCartValue);
+    const projectedSeconds = Math.max(0, secondsLeft - keepPenalty);
+    const priceGuide = createPriceGuide({
+      limit: valueLimit,
+      cartValue: updatedCartValue,
+      secondsLeft: projectedSeconds,
+      totalSeconds: activeTier.secs,
     });
-    const remainingBudget = Math.max(0, valueLimit - updatedCartValue);
-    const nextProduct = selectNextProduct(pool, nextPicked, sectors, remainingBudget);
+    const nextProduct = selectNextProduct(pool, nextPicked, sectors, priceGuide);
     if (nextProduct) {
       setCurrentProduct(nextProduct);
     } else {
@@ -621,6 +698,7 @@ export default function PlayPage() {
     finishRound,
     showActionToast,
     bonusProductIds,
+    secondsLeft,
   ]);
 
   const handleRepeat = useCallback(() => {
