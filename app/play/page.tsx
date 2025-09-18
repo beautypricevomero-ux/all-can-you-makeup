@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
 import styles from "./page.module.css";
 
 type Tier = { id: string; label: string; fee: number; secs: number };
@@ -18,13 +17,19 @@ type Product = {
 
 type Stage = "intro" | "ticket" | "checkout" | "countdown" | "playing" | "summary" | "address";
 type SessionResult = "timeout" | "completed";
-type ActionToast = { type: "reject" | "keep"; penalty: number; remaining: number };
+type ActionToast = {
+  type: "reject" | "keep";
+  penalty: number;
+  remaining: number;
+  bonus?: number;
+};
 type CheckoutFormData = { name: string; email: string; cardNumber: string; expiry: string; cvv: string };
 type CheckoutState = "idle" | "processing" | "error";
 type ShippingForm = { fullName: string; address: string; city: string; zip: string; notes: string };
 
 const REJECT_PENALTY_SECONDS = 10;
 const KEEP_PENALTY_SECONDS = 30;
+const BONUS_SECONDS = 20;
 const STORAGE_KEY = "cym-paid-tiers";
 const EMPTY_CHECKOUT: CheckoutFormData = { name: "", email: "", cardNumber: "", expiry: "", cvv: "" };
 const EMPTY_SHIPPING: ShippingForm = { fullName: "", address: "", city: "", zip: "", notes: "" };
@@ -40,10 +45,53 @@ function formatCurrency(value: number | string | undefined, currencyCode = "EUR"
   }).format(numeric);
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
 function parsePrice(product: Product): number {
   const amount = product.variants?.[0]?.price?.amount;
   const numeric = typeof amount === "string" ? Number(amount) : 0;
   return Number.isNaN(numeric) ? 0 : numeric;
+}
+
+function generateCartLimit(
+  tier: Tier,
+  context: { attemptsLeft: number; completedRounds: number; hasTicket: boolean }
+) {
+  const now = Date.now();
+  const dayPhase = new Date(now).getHours() / 24;
+  const circadianSwing = Math.sin(dayPhase * Math.PI * 2) * 0.05 + Math.cos(dayPhase * Math.PI * 2) * 0.02;
+  const loyaltyBoost = context.hasTicket ? 0.07 : 0;
+  const progressionBoost = clamp(context.completedRounds * 0.018, 0, 0.09);
+  const retryPressure = clamp(0.06 - context.attemptsLeft * 0.02, -0.06, 0.06);
+  const timeScaling = clamp(Math.log10(tier.secs + 120) * 0.12, 0.04, 0.16);
+  const rhythmWave = Math.sin(now / 1600) * 0.06 + Math.cos((now + tier.secs) / 900) * 0.04;
+  const randomVariance = (Math.random() - 0.5) * 0.14;
+
+  const baseline = 2.12 + timeScaling;
+  const exploratoryBias = baseline + circadianSwing + rhythmWave + loyaltyBoost + progressionBoost + retryPressure + randomVariance;
+  const smoothingWeight = context.completedRounds > 0 ? 0.42 : 0.32;
+  const anchor = 2.22 + loyaltyBoost * 0.4;
+  const smoothedMultiplier = exploratoryBias * (1 - smoothingWeight) + anchor * smoothingWeight;
+  const finalMultiplier = clamp(smoothedMultiplier, 2, 2.5);
+
+  return Number((tier.fee * finalMultiplier).toFixed(2));
+}
+
+function selectBonusProductIds(products: Product[]) {
+  if (products.length === 0) return new Set<string>();
+  const pool = [...products];
+  const desired = clamp(Math.round(products.length * 0.18), 1, Math.min(4, products.length));
+  const picks = new Set<string>();
+  while (picks.size < desired && pool.length > 0) {
+    const index = Math.floor(Math.random() * pool.length);
+    const [item] = pool.splice(index, 1);
+    if (item) {
+      picks.add(item.id);
+    }
+  }
+  return picks;
 }
 
 function selectNextProduct(
@@ -103,16 +151,20 @@ function TimerBar({ total, left }: { total: number; left: number }) {
 
 function ActionNotification({ toast }: { toast: ActionToast | null }) {
   if (!toast) return null;
+  const icon = toast.type === "reject" ? "⏳" : toast.bonus ? "✨" : "🛒";
   return (
     <div className={styles.toast} role="status" aria-live="assertive">
-      <div className={styles.toastIcon}>{toast.type === "reject" ? "⏳" : "🛒"}</div>
+      <div className={styles.toastIcon}>{icon}</div>
       <div>
         <p className={styles.toastTitle}>
           {toast.type === "reject" ? "Prodotto scartato" : "Prodotto nel carrello"}
         </p>
         <p className={styles.toastBody}>
-          Hai consumato <strong>{toast.penalty}s</strong>. Tempo residuo: <strong>{toast.remaining}s</strong>.
+          Hai consumato <strong>{toast.penalty}s</strong>
+          {toast.type === "keep" && toast.bonus ? ` (bonus tempo +${toast.bonus}s)` : ""}.
+          Tempo residuo: <strong>{toast.remaining}s</strong>.
         </p>
+        {toast.bonus ? <p className={styles.toastBonus}>Bonus tempo attivato!</p> : null}
       </div>
     </div>
   );
@@ -123,85 +175,155 @@ function SwipeCard({
   disabled,
   onReject,
   onKeep,
-  sectorLabel,
+  isBonus,
+  bonusSeconds,
 }: {
   product: Product;
   disabled: boolean;
   onReject: () => void;
   onKeep: () => void;
-  sectorLabel?: string;
+  isBonus: boolean;
+  bonusSeconds: number;
 }) {
-  const [deltaX, setDeltaX] = useState(0);
-  const pointerStart = useRef<number | null>(null);
-  const active = useRef(false);
+  const [animation, setAnimation] = useState<"reject" | "keep" | null>(null);
+  const [isDescriptionOpen, setIsDescriptionOpen] = useState(false);
+  const animationTimer = useRef<NodeJS.Timeout | null>(null);
 
-  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (disabled) return;
-    pointerStart.current = event.clientX;
-    active.current = true;
-    (event.target as HTMLElement).setPointerCapture(event.pointerId);
-  };
+  useEffect(() => {
+    return () => {
+      if (animationTimer.current) {
+        clearTimeout(animationTimer.current);
+      }
+    };
+  }, []);
 
-  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!active.current || pointerStart.current === null) return;
-    setDeltaX(event.clientX - pointerStart.current);
-  };
-
-  const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!active.current || pointerStart.current === null) return;
-    const delta = event.clientX - pointerStart.current;
-    pointerStart.current = null;
-    active.current = false;
-    setDeltaX(0);
-    if (delta > 80) {
-      onKeep();
-    } else if (delta < -80) {
-      onReject();
+  useEffect(() => {
+    if (animationTimer.current) {
+      clearTimeout(animationTimer.current);
+      animationTimer.current = null;
     }
-  };
+    setAnimation(null);
+    setIsDescriptionOpen(false);
+  }, [product.id]);
+
+  const triggerAction = useCallback(
+    (type: "reject" | "keep") => {
+      if (disabled || animation) return;
+      if (animationTimer.current) {
+        clearTimeout(animationTimer.current);
+      }
+      setAnimation(type);
+      const callback = type === "keep" ? onKeep : onReject;
+      const duration = type === "keep" ? 450 : 550;
+      animationTimer.current = setTimeout(() => {
+        callback();
+        setAnimation(null);
+        animationTimer.current = null;
+      }, duration);
+    },
+    [animation, disabled, onKeep, onReject]
+  );
 
   const price = product.variants?.[0]?.price;
+  const isAnimating = animation !== null;
+  const descriptionCopy =
+    product.description?.trim() || "Scopri tutti i dettagli sul nostro catalogo.";
+  const descriptionId = `product-desc-${product.id}`;
+
+  const cardClassName = [
+    styles.productCard,
+    disabled ? styles.cardDisabled : "",
+    animation === "reject" ? styles.cardRejecting : "",
+    animation === "keep" ? styles.cardKeeping : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const netKeepPenalty = Math.max(0, KEEP_PENALTY_SECONDS - (isBonus ? bonusSeconds : 0));
+
+  const toggleDescription = useCallback(() => {
+    setIsDescriptionOpen((prev) => !prev);
+  }, []);
 
   return (
-    <div
-      className={`${styles.productCard} ${disabled ? styles.cardDisabled : ""}`}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerUp}
-      style={{ transform: `translateX(${deltaX}px) rotate(${deltaX / 25}deg)` }}
-    >
-      <div className={styles.productImageWrap}>
-        <img
-          src={product.images?.[0]?.url || "https://picsum.photos/seed/makeup/720/720"}
-          alt={product.images?.[0]?.altText || product.title}
-        />
-        {sectorLabel ? <span className={styles.sectorBadge}>{sectorLabel}</span> : null}
+    <div className={styles.cardStage}>
+      <div className={cardClassName}>
+        <div className={styles.cardAura} aria-hidden="true" />
+        <div className={styles.cardInterior}>
+          <div className={styles.productImageWrap}>
+            {isBonus ? (
+              <span className={styles.bonusBadge}>
+                <span className={styles.bonusBadgeMain}>+{bonusSeconds}</span>
+                <span className={styles.bonusBadgeSub}>sec</span>
+                <span className={styles.bonusBadgeNote}>bonus</span>
+              </span>
+            ) : null}
+            <img
+              src={product.images?.[0]?.url || "https://picsum.photos/seed/makeup/720/720"}
+              alt={product.images?.[0]?.altText || product.title}
+            />
+          </div>
+          <div className={styles.productBody}>
+            <h2>
+              <button
+                type="button"
+                className={`${styles.productTitleButton} ${
+                  isDescriptionOpen ? styles.productTitleOpen : ""
+                }`}
+                onClick={toggleDescription}
+                aria-expanded={isDescriptionOpen}
+                aria-controls={descriptionId}
+              >
+                <span>{product.title}</span>
+                <span aria-hidden="true" className={styles.productTitleIcon}>
+                  {isDescriptionOpen ? "▴" : "▾"}
+                </span>
+              </button>
+            </h2>
+            <div
+              className={`${styles.productDescription} ${
+                isDescriptionOpen ? styles.descriptionOpen : ""
+              }`}
+              id={descriptionId}
+            >
+              <p>{descriptionCopy}</p>
+            </div>
+            <div className={styles.priceTag}>{formatCurrency(price?.amount, price?.currencyCode)}</div>
+          </div>
+        </div>
       </div>
-      <div className={styles.productBody}>
-        <h2>{product.title}</h2>
-        <p>{product.description || "Scopri tutti i dettagli sul nostro catalogo."}</p>
-        <div className={styles.priceTag}>{formatCurrency(price?.amount, price?.currencyCode)}</div>
-      </div>
-      <div className={styles.swipeOverlay}>
-        <button
-          type="button"
-          className={`${styles.controlButton} ${styles.reject}`}
-          onClick={onReject}
-          disabled={disabled}
-          aria-label="Rifiuta prodotto"
-        >
-          ✕
-        </button>
-        <button
-          type="button"
-          className={`${styles.controlButton} ${styles.keep}`}
-          onClick={onKeep}
-          disabled={disabled}
-          aria-label="Aggiungi al carrello"
-        >
-          ❤
-        </button>
+      <div className={styles.controlDock}>
+        <div className={styles.controlGroup}>
+          <span className={styles.controlPenalty}>- {REJECT_PENALTY_SECONDS}s</span>
+          <button
+            type="button"
+            className={`${styles.controlButton} ${styles.controlReject} ${styles.pulseControl}`}
+            onClick={() => triggerAction("reject")}
+            disabled={disabled || isAnimating}
+            aria-label="Scarta prodotto"
+          >
+            <span aria-hidden="true" className={styles.controlIcon}>✕</span>
+          </button>
+          <span className={styles.controlLabel}>Scarta</span>
+        </div>
+        <div className={styles.controlGroup}>
+          <span className={styles.controlPenalty}>
+            - {netKeepPenalty}s
+            {isBonus ? (
+              <span className={styles.controlBonusTag}>+{bonusSeconds}s bonus</span>
+            ) : null}
+          </span>
+          <button
+            type="button"
+            className={`${styles.controlButton} ${styles.controlKeep} ${styles.pulseControl}`}
+            onClick={() => triggerAction("keep")}
+            disabled={disabled || isAnimating}
+            aria-label="Aggiungi al carrello"
+          >
+            <span aria-hidden="true" className={styles.controlIcon}>❤</span>
+          </button>
+          <span className={styles.controlLabel}>Aggiungi</span>
+        </div>
       </div>
     </div>
   );
@@ -225,20 +347,17 @@ export default function PlayPage() {
   const [currentProduct, setCurrentProduct] = useState<Product | null>(null);
   const [pickedIds, setPickedIds] = useState<string[]>([]);
   const [keptProducts, setKeptProducts] = useState<Product[]>([]);
+  const [bonusProductIds, setBonusProductIds] = useState<Set<string>>(() => new Set());
   const [result, setResult] = useState<SessionResult | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [isFetching, setIsFetching] = useState(false);
   const [actionToast, setActionToast] = useState<ActionToast | null>(null);
+  const [completedRounds, setCompletedRounds] = useState(0);
 
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
   const countdownTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const activeTier = useMemo(() => settings?.tiers.find((tier) => tier.id === activeTierId) ?? null, [settings, activeTierId]);
-  const currentSectorLabel = useMemo(() => {
-    if (!settings || !activeTier || !currentProduct) return undefined;
-    return settings.sectorsByTier[activeTier.id]?.find((sector) => sector.id === currentProduct.sector)?.label;
-  }, [settings, activeTier, currentProduct]);
-
   useEffect(() => {
     void fetch("/api/settings")
       .then((response) => response.json())
@@ -268,6 +387,7 @@ export default function PlayPage() {
       setResult(outcome);
       setStage("summary");
       setSecondsLeft(0);
+      setCompletedRounds((prev) => (outcome === "completed" ? prev + 1 : prev));
       if (toastTimerRef.current) {
         clearTimeout(toastTimerRef.current);
         toastTimerRef.current = null;
@@ -306,6 +426,7 @@ export default function PlayPage() {
     (preserveRetries: boolean) => {
       setPickedIds([]);
       setKeptProducts([]);
+      setBonusProductIds(new Set());
       setPool([]);
       setCurrentProduct(null);
       setCartValue(0);
@@ -341,6 +462,7 @@ export default function PlayPage() {
         const data = await response.json();
         const products: Product[] = data.products ?? [];
         setPool(products);
+        setBonusProductIds(selectBonusProductIds(products));
         const next = selectNextProduct(products, [], sectors, limit);
         if (next) {
           setCurrentProduct(next);
@@ -360,8 +482,11 @@ export default function PlayPage() {
   const startCountdown = useCallback(
     (tier: Tier, preserveRetries = false) => {
       resetRoundState(preserveRetries);
-      const multiplier = 2 + Math.random() * 0.5;
-      const limit = Number((tier.fee * multiplier).toFixed(2));
+      const limit = generateCartLimit(tier, {
+        attemptsLeft,
+        completedRounds,
+        hasTicket: paidTickets.has(tier.id),
+      });
       setValueLimit(limit);
       setSecondsLeft(tier.secs);
       setCountdownValue(3);
@@ -384,19 +509,22 @@ export default function PlayPage() {
         }
       }, 1000);
     },
-    [resetRoundState, startRound]
+    [attemptsLeft, completedRounds, paidTickets, resetRoundState, startRound]
   );
 
-  const showActionToast = useCallback((type: "reject" | "keep", penalty: number, remaining: number) => {
-    setActionToast({ type, penalty, remaining });
-    if (toastTimerRef.current) {
-      clearTimeout(toastTimerRef.current);
-    }
-    toastTimerRef.current = setTimeout(() => {
-      setActionToast(null);
-      toastTimerRef.current = null;
-    }, 2400);
-  }, []);
+  const showActionToast = useCallback(
+    (type: "reject" | "keep", penalty: number, remaining: number, bonus = 0) => {
+      setActionToast({ type, penalty, remaining, bonus: bonus > 0 ? bonus : undefined });
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current);
+      }
+      toastTimerRef.current = setTimeout(() => {
+        setActionToast(null);
+        toastTimerRef.current = null;
+      }, 2400);
+    },
+    []
+  );
 
   const handleTicketSelection = useCallback(
     (tierId: string) => {
@@ -456,6 +584,9 @@ export default function PlayPage() {
   const handleKeep = useCallback(() => {
     if (!settings || !activeTier || !currentProduct || stage !== "playing") return;
     const productPrice = parsePrice(currentProduct);
+    const isBonus = bonusProductIds.has(currentProduct.id);
+    const bonusSeconds = isBonus ? BONUS_SECONDS : 0;
+    const keepPenalty = Math.max(0, KEEP_PENALTY_SECONDS - bonusSeconds);
     const sectors = settings.sectorsByTier[activeTier.id] ?? [];
     const nextPicked = [...pickedIds, currentProduct.id];
     setPickedIds(nextPicked);
@@ -473,12 +604,24 @@ export default function PlayPage() {
       finishRound("completed");
     }
     setSecondsLeft((prev) => {
-      const penalty = Math.min(KEEP_PENALTY_SECONDS, prev);
-      const next = Math.max(0, prev - KEEP_PENALTY_SECONDS);
-      showActionToast("keep", penalty, next);
+      const penalty = Math.min(keepPenalty, prev);
+      const next = Math.max(0, prev - keepPenalty);
+      showActionToast("keep", penalty, next, bonusSeconds);
       return next;
     });
-  }, [settings, activeTier, currentProduct, stage, pickedIds, valueLimit, cartValue, pool, finishRound, showActionToast]);
+  }, [
+    settings,
+    activeTier,
+    currentProduct,
+    stage,
+    pickedIds,
+    valueLimit,
+    cartValue,
+    pool,
+    finishRound,
+    showActionToast,
+    bonusProductIds,
+  ]);
 
   const handleRepeat = useCallback(() => {
     if (!activeTier || attemptsLeft <= 0) return;
@@ -489,6 +632,17 @@ export default function PlayPage() {
   const handleConfirm = useCallback(() => {
     setStage("address");
   }, []);
+
+  const handleReturnHome = useCallback(() => {
+    resetRoundState(false);
+    setActiveTierId(null);
+    setCheckoutState("idle");
+    setCheckoutForm(() => ({ ...EMPTY_CHECKOUT }));
+    setCountdownValue(3);
+    setSecondsLeft(0);
+    setValueLimit(0);
+    setStage("intro");
+  }, [resetRoundState]);
 
   const handleShippingSubmit = useCallback(
     (event: React.FormEvent<HTMLFormElement>) => {
@@ -504,8 +658,17 @@ export default function PlayPage() {
   const savingsPercent = totalValue > 0 ? Math.round((savings / totalValue) * 100) : 0;
 
   return (
-    <section className={styles.page}>
-      <ActionNotification toast={actionToast} />
+    <main className="app-main">
+      <header className={styles.playHeader}>
+        {stage === "playing" && activeTier ? (
+          <div className={styles.timerWrap}>
+            <TimerBar total={activeTier.secs} left={secondsLeft} />
+          </div>
+        ) : null}
+      </header>
+
+      <section className={styles.page}>
+        <ActionNotification toast={actionToast} />
 
       {!settings ? (
         <div className={styles.loader}>Caricamento impostazioni…</div>
@@ -515,9 +678,15 @@ export default function PlayPage() {
         <div className={styles.stepCard}>
           <h1 className={styles.introTitle}>All You Can Makeup</h1>
           <p className={styles.introCopy}>
-            Il tuo limite sarà solo il tempo: tutto quello che metterai nel carrello sarà tuo!
+            Il tuo limite è solo il tempo, tutto quello che riuscirai a mettere nel carrello sarà tuo.
           </p>
-          <button type="button" className={styles.glowButton} onClick={() => setStage("ticket")}>GIOCA</button>
+          <button
+            type="button"
+            className={`${styles.glowButton} ${styles.pulseGlow}`}
+            onClick={() => setStage("ticket")}
+          >
+            GIOCA
+          </button>
         </div>
       )}
 
@@ -527,7 +696,7 @@ export default function PlayPage() {
           <div className={styles.ticketGrid}>
             {settings.tiers.map((tier) => (
               <details key={tier.id} className={styles.ticketCard}>
-                <summary className={styles.ticketSummary}>
+                <summary className={`${styles.ticketSummary} ${styles.ticketPulse}`}>
                   <span className={styles.ticketPrice}>{formatCurrency(tier.fee)}</span>
                   <span className={styles.ticketTime}>{tier.secs}s di tempo</span>
                 </summary>
@@ -537,7 +706,11 @@ export default function PlayPage() {
                     riempire il carrello.
                   </p>
                   {paidTickets.has(tier.id) ? <span className={styles.ticketBadge}>Biglietto già acquistato</span> : null}
-                  <button type="button" onClick={() => handleTicketSelection(tier.id)}>
+                  <button
+                    type="button"
+                    className={styles.ticketAction}
+                    onClick={() => handleTicketSelection(tier.id)}
+                  >
                     Scegli questo biglietto
                   </button>
                 </div>
@@ -631,28 +804,35 @@ export default function PlayPage() {
 
       {stage === "playing" && activeTier && (
         <div className={styles.playground}>
-          <header className={styles.playHeader}>
-            <div className={styles.badges}>
-              <span className={styles.tierBadge}>{activeTier.label}</span>
-              <span className={styles.infoBadge}>Valore carrello {formatCurrency(totalValue)}</span>
-              <span className={styles.infoBadge}>{keptProducts.length} prodotti</span>
+          <div className={styles.playStage}>
+            <div className={styles.playBody}>
+              {isFetching && !currentProduct ? (
+                <div className={styles.loader}>Caricamento prodotti…</div>
+              ) : null}
+              {currentProduct ? (
+                <SwipeCard
+                  key={currentProduct.id}
+                  product={currentProduct}
+                  disabled={secondsLeft <= 0}
+                  onReject={handleReject}
+                  onKeep={handleKeep}
+                  isBonus={bonusProductIds.has(currentProduct.id)}
+                  bonusSeconds={BONUS_SECONDS}
+                />
+              ) : null}
+              <div className={styles.stageStats}>
+                <div className={styles.timerStats}>
+                  <div className={styles.timerStat}>
+                    <span className={styles.statLabel}>Valore carrello</span>
+                    <span className={styles.statValue}>{formatCurrency(totalValue)}</span>
+                  </div>
+                  <div className={styles.timerStat}>
+                    <span className={styles.statLabel}>Prodotti</span>
+                    <span className={styles.statValue}>{keptProducts.length}</span>
+                  </div>
+                </div>
+              </div>
             </div>
-            <TimerBar total={activeTier.secs} left={secondsLeft} />
-          </header>
-
-          <div className={styles.playBody}>
-            {isFetching && !currentProduct ? (
-              <div className={styles.loader}>Caricamento prodotti…</div>
-            ) : null}
-            {currentProduct ? (
-              <SwipeCard
-                product={currentProduct}
-                disabled={secondsLeft <= 0}
-                onReject={handleReject}
-                onKeep={handleKeep}
-                sectorLabel={currentSectorLabel}
-              />
-            ) : null}
           </div>
         </div>
       )}
@@ -699,12 +879,19 @@ export default function PlayPage() {
         <div className={styles.stepCard}>
           <h2 className={styles.stepTitle}>Indirizzo di spedizione</h2>
           {addressSubmitted ? (
-            <div className={styles.successBox}>
-              <p>
-                Grazie {shippingForm.fullName}! Abbiamo registrato il tuo ordine per un valore di {formatCurrency(totalValue)}. Ti
-                invieremo una conferma all'indirizzo {checkoutForm.email} appena sarà pronto.
-              </p>
-            </div>
+            <>
+              <div className={styles.successBox}>
+                <p>
+                  Grazie {shippingForm.fullName}! Abbiamo registrato il tuo ordine per un valore di {formatCurrency(totalValue)}. Ti
+                  invieremo una conferma all'indirizzo {checkoutForm.email} appena sarà pronto.
+                </p>
+              </div>
+              <div className={styles.successActions}>
+                <button type="button" className={styles.glowButton} onClick={handleReturnHome}>
+                  TORNA ALLA HOME
+                </button>
+              </div>
+            </>
           ) : (
             <form className={styles.form} onSubmit={handleShippingSubmit}>
               <div className={styles.formRow}>
@@ -766,6 +953,7 @@ export default function PlayPage() {
           )}
         </div>
       )}
-    </section>
+      </section>
+    </main>
   );
 }
