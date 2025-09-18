@@ -1,46 +1,150 @@
 .page {
-  min-height: calc(100vh - 160px);
+  min-height: calc(100vh - 140px);
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: clamp(1.5rem, 4vw, 3.5rem) clamp(1rem, 4vw, 3rem) clamp(3rem, 6vw, 4rem);
+  padding: clamp(1.2rem, 4vw, 2.2rem) clamp(0.75rem, 4vw, 1.8rem);
   position: relative;
+  isolation: isolate;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.playHeader {
+  width: 100%;
+  position: sticky;
+  top: clamp(0.6rem, 2.5vw, 1.4rem);
+  display: flex;
+  justify-content: center;
+  padding: clamp(0.35rem, 2vw, 0.9rem) clamp(0.75rem, 6vw, 2rem) 0;
+  z-index: 30;
+}
+
+.page::before,
+.page::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  width: clamp(280px, 45vw, 520px);
+  height: clamp(280px, 45vw, 520px);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 184, 212, 0.35) 0%, rgba(255, 255, 255, 0) 72%);
+  filter: blur(0px);
+}
+
+.page::before {
+  top: -120px;
+  left: -140px;
+}
+
+.page::after {
+  bottom: -160px;
+  right: -120px;
+}
+
+.page > * {
+  position: relative;
+  z-index: 1;
 }
 
 .loader {
   text-align: center;
   font-weight: 500;
-  color: #b10059;
+  color: #ff5e86;
+}
+
+.timerWrap {
+  flex: 1;
+  display: grid;
+  gap: clamp(0.65rem, 2.4vw, 1.35rem);
+  align-items: center;
+  justify-items: stretch;
+  padding: clamp(0.9rem, 2.8vw, 1.5rem) clamp(1rem, 4vw, 2rem);
+  border-radius: clamp(30px, 6vw, 44px);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(255, 186, 214, 0.78));
+  border: 1px solid rgba(255, 149, 190, 0.38);
+  box-shadow: 0 42px 110px rgba(255, 149, 190, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(28px) saturate(145%);
+  width: min(100%, clamp(360px, 100vw, 960px));
+  margin-inline: auto;
+  position: relative;
+}
+
+.timerWrap::after {
+  content: "";
+  position: absolute;
+  inset: -18% -8% auto;
+  height: 60%;
+  border-radius: inherit;
+  background: radial-gradient(circle at 50% 0%, rgba(255, 220, 233, 0.72), rgba(255, 255, 255, 0) 70%);
+  z-index: 0;
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.timerWrap > * {
+  position: relative;
+  z-index: 1;
 }
 
 .timer {
-  display: inline-flex;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.85);
-  box-shadow: 0 15px 45px rgba(20, 30, 55, 0.12);
+  gap: clamp(0.6rem, 3vw, 1rem);
+  padding: 0;
 }
 
 .timerTrack {
-  width: clamp(140px, 25vw, 240px);
-  height: 0.5rem;
+  width: 100%;
+  height: clamp(0.55rem, 1.2vw, 0.78rem);
   border-radius: 999px;
-  background: rgba(255, 174, 215, 0.28);
+  background: rgba(255, 182, 212, 0.35);
   overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 .timerFill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(135deg, #ff7cb4 0%, #ff9a8d 100%);
+  background: linear-gradient(135deg, #ff6b88 0%, #ff9d6f 100%);
   transition: width 0.35s ease;
 }
 
 .timerLabel {
-  font-weight: 600;
-  color: #b10059;
+  font-weight: 700;
+  color: #ff376d;
+  font-size: clamp(1rem, 2.8vw, 1.25rem);
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 12px 28px rgba(255, 128, 170, 0.25);
+}
+
+.timerStats {
+  width: min(100%, clamp(340px, 92vw, 620px));
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(0.35rem, 1.8vw, 0.6rem);
+  align-items: stretch;
+}
+
+.timerStat {
+  display: grid;
+  gap: 0.25rem;
+  padding: clamp(0.45rem, 1.8vw, 0.7rem) clamp(0.6rem, 2vw, 1rem);
+  border-radius: clamp(14px, 3vw, 18px);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.96), rgba(255, 180, 214, 0.7));
+  border: 1px solid rgba(255, 163, 206, 0.45);
+  box-shadow: 0 26px 55px rgba(255, 152, 199, 0.38);
+  justify-items: center;
+}
+
+.timerStat:last-child {
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.94), rgba(255, 200, 224, 0.65));
 }
 
 .toast {
@@ -51,11 +155,11 @@
   display: inline-flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.9rem 1.1rem;
+  padding: 0.95rem 1.25rem;
   border-radius: 999px;
-  background: rgba(17, 24, 39, 0.85);
+  background: rgba(17, 24, 39, 0.82);
   color: white;
-  box-shadow: 0 18px 45px rgba(17, 24, 39, 0.3);
+  box-shadow: 0 18px 45px rgba(17, 24, 39, 0.35);
   z-index: 40;
 }
 
@@ -76,41 +180,46 @@
 
 .stepCard {
   width: min(640px, 100%);
-  background: rgba(255, 255, 255, 0.94);
-  border-radius: 28px;
-  box-shadow: 0 28px 80px rgba(20, 30, 55, 0.18);
-  padding: clamp(2rem, 4vw, 3.25rem);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.92), rgba(255, 214, 232, 0.82));
+  border-radius: 32px;
+  border: 1px solid rgba(255, 149, 190, 0.25);
+  box-shadow: 0 30px 80px rgba(255, 149, 190, 0.26);
+  padding: clamp(2.2rem, 5vw, 3.4rem);
   display: flex;
   flex-direction: column;
-  gap: 1.4rem;
+  gap: 1.6rem;
   text-align: center;
+  backdrop-filter: blur(12px);
 }
 
 .introTitle {
-  font-size: clamp(2.4rem, 6vw, 3.2rem);
-  font-weight: 700;
-  color: #b10059;
   margin: 0;
-  letter-spacing: -0.02em;
+  font-size: clamp(2.6rem, 6vw, 3.4rem);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #ff5e86;
 }
 
 .introCopy {
   margin: 0;
-  font-size: clamp(1rem, 2.6vw, 1.25rem);
-  color: rgba(17, 24, 39, 0.74);
+  font-size: clamp(1.05rem, 2.6vw, 1.3rem);
+  color: rgba(17, 24, 39, 0.72);
+  max-width: 38ch;
+  align-self: center;
 }
 
 .glowButton {
   align-self: center;
   border: none;
   border-radius: 999px;
-  padding: 0.9rem 2.6rem;
+  padding: 1rem 3.1rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: white;
-  background: radial-gradient(circle at 50% 20%, #ffe6f3 0%, #ff7cb4 38%, #b10059 100%);
-  box-shadow: 0 25px 70px rgba(177, 0, 89, 0.35), 0 0 25px rgba(255, 255, 255, 0.8);
+  background: linear-gradient(135deg, #ff6b88 0%, #ff8c6f 45%, #ffce8d 100%);
+  box-shadow: 0 28px 75px rgba(255, 128, 170, 0.45), 0 0 28px rgba(255, 255, 255, 0.8);
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
@@ -124,32 +233,34 @@
 .glowButton:hover:not(:disabled),
 .glowButton:focus-visible:not(:disabled) {
   transform: translateY(-2px) scale(1.01);
-  box-shadow: 0 28px 75px rgba(177, 0, 89, 0.42), 0 0 32px rgba(255, 255, 255, 0.9);
+  box-shadow: 0 32px 82px rgba(255, 128, 170, 0.55), 0 0 34px rgba(255, 255, 255, 0.9);
 }
 
 .stepTitle {
   margin: 0;
-  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  font-size: clamp(1.9rem, 3.2vw, 2.5rem);
   font-weight: 700;
-  color: #b10059;
+  color: #ff5e86;
 }
 
 .stepSubtitle {
   margin: 0;
-  color: rgba(17, 24, 39, 0.7);
+  color: rgba(17, 24, 39, 0.72);
   font-size: 1.05rem;
 }
 
 .ticketGrid {
   display: grid;
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 1.2rem;
 }
 
 .ticketCard {
-  background: rgba(255, 255, 255, 0.88);
-  border-radius: 20px;
-  border: 1px solid rgba(177, 0, 89, 0.12);
+  background: rgba(255, 255, 255, 0.78);
+  border-radius: 24px;
+  border: 1px solid rgba(255, 149, 190, 0.22);
   overflow: hidden;
+  box-shadow: 0 20px 45px rgba(255, 149, 190, 0.18);
 }
 
 .ticketCard summary {
@@ -165,233 +276,534 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 1.2rem 1.5rem;
-  background: linear-gradient(135deg, rgba(255, 124, 180, 0.15), rgba(255, 154, 141, 0.18));
-  color: #b10059;
+  padding: 1.35rem 1.7rem;
+  background: linear-gradient(140deg, rgba(255, 182, 212, 0.26), rgba(255, 214, 232, 0.32));
+  color: #ff5e86;
   font-weight: 600;
-  font-size: 1.15rem;
+  font-size: 1.18rem;
   cursor: pointer;
 }
 
 .ticketSummary:focus-visible {
-  outline: 2px solid rgba(177, 0, 89, 0.32);
+  outline: 2px solid rgba(255, 149, 190, 0.35);
   outline-offset: 4px;
 }
 
 .ticketBody {
-  padding: 1.2rem 1.5rem 1.5rem;
+  padding: 1.4rem 1.7rem 1.75rem;
   text-align: left;
   font-size: 0.95rem;
-  color: rgba(17, 24, 39, 0.7);
+  color: rgba(17, 24, 39, 0.72);
   display: grid;
-  gap: 0.5rem;
+  gap: 0.65rem;
+  background: rgba(255, 255, 255, 0.78);
 }
 
 .ticketBody button {
   justify-self: start;
   border: none;
   border-radius: 999px;
-  padding: 0.6rem 1.3rem;
-  background: rgba(177, 0, 89, 0.18);
-  color: #b10059;
+  padding: 0.65rem 1.5rem;
+  background: rgba(255, 149, 190, 0.18);
+  color: #ff5e86;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.2s ease;
+  transition: transform 0.2s ease, background 0.2s ease;
 }
 
 .ticketBody button:hover,
 .ticketBody button:focus-visible {
   transform: translateY(-2px);
+  background: rgba(255, 149, 190, 0.26);
 }
 
 .ticketPrice {
-  font-size: 1.4rem;
+  font-size: 1.6rem;
 }
 
 .ticketTime {
   font-size: 0.95rem;
   color: rgba(17, 24, 39, 0.65);
+  letter-spacing: 0.02em;
 }
 
 .ticketBadge {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.4rem 0.75rem;
+  padding: 0.45rem 0.85rem;
   border-radius: 999px;
-  background: rgba(177, 0, 89, 0.12);
-  color: #b10059;
+  background: rgba(58, 199, 165, 0.16);
+  color: #1f8a71;
   font-weight: 600;
   font-size: 0.85rem;
 }
 
 .countdownCircle {
-  width: clamp(160px, 35vw, 220px);
-  height: clamp(160px, 35vw, 220px);
+  width: clamp(180px, 38vw, 240px);
+  height: clamp(180px, 38vw, 240px);
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 35%, #ffe6f3, #ff7cb4 65%, #b10059 100%);
+  background: radial-gradient(circle at 50% 35%, #ffe6f3 0%, #ff7cb4 60%, #ff5e86 100%);
   display: grid;
   place-items: center;
   color: white;
   font-weight: 700;
-  font-size: clamp(2.5rem, 10vw, 4rem);
+  font-size: clamp(2.8rem, 11vw, 4.1rem);
   margin: 1rem auto 0;
-  animation: pulse 1s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.05);
-  }
+  box-shadow: 0 30px 70px rgba(255, 128, 170, 0.45);
 }
 
 .playground {
-  width: min(960px, 100%);
-  display: grid;
-  gap: 1.8rem;
-}
-
-.playHeader {
+  width: min(980px, 100%);
+  margin: 0 auto;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  flex-direction: column;
+  gap: clamp(1.2rem, 3vw, 1.8rem);
+  position: relative;
+  padding: clamp(0.75rem, 2.6vw, 1.5rem);
+  isolation: isolate;
+  min-height: auto;
 }
 
-.badges {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 0.65rem;
+
+.playStage {
+  position: relative;
+  width: 100%;
+  min-height: auto;
+  display: flex;
+  justify-content: center;
+  padding: clamp(1rem, 4vw, 2.4rem) clamp(0.6rem, 4vw, 1.6rem) clamp(1.6rem, 7vw, 2.6rem);
 }
 
-.tierBadge,
-.infoBadge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.55rem 1rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.85);
-  box-shadow: 0 12px 30px rgba(20, 30, 55, 0.14);
+.sideStat {
+  position: absolute;
+  top: clamp(18%, 22vw, 30%);
+  width: clamp(160px, 30vw, 220px);
+  display: grid;
+  gap: 0.35rem;
+  padding: 1rem 1.2rem;
+  border-radius: 26px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.92), rgba(255, 214, 232, 0.7));
+  border: 1px solid rgba(255, 149, 190, 0.32);
+  box-shadow: 0 28px 68px rgba(20, 30, 55, 0.2);
+  backdrop-filter: blur(20px);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.leftStat {
+  left: clamp(0.8rem, 7vw, 3.8rem);
+  transform: translate(-38%, -18%);
+}
+
+.rightStat {
+  right: clamp(0.8rem, 7vw, 3.8rem);
+  transform: translate(38%, -18%);
+  text-align: right;
+}
+
+.statAccent {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.96), rgba(255, 214, 232, 0.82));
+  box-shadow: 0 34px 90px rgba(255, 149, 190, 0.32);
+}
+
+.statSoft {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.85), rgba(255, 214, 232, 0.64));
+  box-shadow: 0 24px 70px rgba(20, 30, 55, 0.2);
+}
+
+.statLabel {
+  font-size: clamp(0.6rem, 1.8vw, 0.7rem);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 94, 150, 0.78);
+  font-weight: 700;
+}
+
+.statValue {
+  font-size: clamp(0.85rem, 2.2vw, 1rem);
   font-weight: 600;
-  color: #b10059;
+  color: #ff4f8b;
 }
 
 .playBody {
+  position: relative;
+  width: min(100%, clamp(360px, 90vw, 640px));
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: clamp(1.1rem, 4vw, 1.9rem);
+  padding: clamp(0.9rem, 4vw, 1.5rem) clamp(0.8rem, 4vw, 1.6rem) clamp(1.6rem, 6vw, 2.6rem);
+  min-height: auto;
+  isolation: isolate;
+  perspective: 1600px;
+  margin-inline: auto;
+}
+
+.stageStats {
+  width: 100%;
   display: flex;
   justify-content: center;
 }
 
+
+.cardStage {
+  position: relative;
+  width: min(100%, clamp(340px, 92vw, 620px));
+  display: grid;
+  gap: clamp(1.1rem, 4vw, 2.2rem);
+  justify-items: center;
+  z-index: 1;
+}
+
 .productCard {
   position: relative;
-  width: min(420px, 100%);
-  border-radius: 32px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 35px 80px rgba(20, 30, 55, 0.18);
+  width: 100%;
+  padding: clamp(0.65rem, 2vw, 1rem);
+  border-radius: clamp(32px, 7vw, 42px);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.82), rgba(255, 193, 218, 0.6));
+  border: 1px solid rgba(255, 176, 214, 0.45);
+  box-shadow: 0 60px 140px rgba(255, 150, 200, 0.35), 0 34px 80px rgba(255, 176, 214, 0.32);
+  transition: box-shadow 0.35s ease, transform 0.4s cubic-bezier(0.18, 0.88, 0.38, 1);
+  isolation: isolate;
+  backdrop-filter: blur(28px) saturate(140%);
+  transform-style: preserve-3d;
+}
+
+.productCard::before {
+  content: "";
+  position: absolute;
+  inset: -65% -20% auto;
+  height: 160%;
+  background: radial-gradient(circle at 50% 10%, rgba(255, 196, 219, 0.55), rgba(255, 255, 255, 0) 60%);
+  opacity: 0.85;
+  z-index: 0;
+}
+
+.productCard::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(125deg, rgba(255, 255, 255, 0.48), rgba(255, 255, 255, 0) 58%);
+  mix-blend-mode: screen;
+  z-index: 0;
+}
+
+.productCard > * {
+  position: relative;
+  z-index: 1;
+}
+
+.cardInterior {
+  position: relative;
+  border-radius: clamp(26px, 6vw, 36px);
   overflow: hidden;
   display: grid;
-  gap: 1.1rem;
-  padding-bottom: 1.25rem;
-  transition: transform 0.2s ease;
+  gap: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 204, 224, 0.42));
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: clamp(1rem, 4vw, 1.35rem) clamp(1.2rem, 4vw, 1.8rem) clamp(0.4rem, 2vw, 0.8rem);
+  gap: 1rem;
+}
+
+.cardLocation {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 1.15rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: rgba(17, 24, 39, 0.85);
+  font-weight: 600;
+  font-size: 0.85rem;
+  box-shadow: 0 16px 32px rgba(17, 24, 39, 0.18);
+}
+
+.locationDot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: #ff5e86;
+  box-shadow: 0 0 0 4px rgba(255, 94, 134, 0.25);
+}
+
+.cardHeaderIcons {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.cardHeaderIcon {
+  width: clamp(34px, 10vw, 42px);
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  background: rgba(17, 24, 39, 0.12);
+  color: rgba(17, 24, 39, 0.65);
+  display: grid;
+  place-items: center;
+  font-size: 0.95rem;
+  box-shadow: 0 14px 28px rgba(17, 24, 39, 0.18);
+}
+
+.cardAura {
+  position: absolute;
+  inset: 14% 16% 16%;
+  border-radius: 32px;
+  background: radial-gradient(circle at center, rgba(255, 172, 210, 0.45), rgba(255, 149, 190, 0));
+  filter: blur(20px);
+  opacity: 0.7;
+  z-index: 0;
+  pointer-events: none;
 }
 
 .cardDisabled {
-  opacity: 0.65;
+  opacity: 0.6;
   pointer-events: none;
+}
+
+.cardRejecting {
+  animation: cardRejectCrumple 0.55s cubic-bezier(0.45, 0.01, 0.19, 0.97) forwards;
+}
+
+.cardKeeping {
+  animation: cardKeepExit 0.45s cubic-bezier(0.22, 0.73, 0.27, 0.99) forwards;
+  box-shadow: 0 52px 120px rgba(255, 198, 224, 0.42), 0 26px 60px rgba(255, 149, 190, 0.32);
+}
+
+.cardKeeping .cardAura {
+  animation: cardAuraBloom 0.45s ease forwards;
 }
 
 .productImageWrap {
   position: relative;
-  aspect-ratio: 1 / 1;
+  margin: clamp(0.45rem, 2vw, 0.9rem) clamp(1.2rem, 4vw, 1.8rem) 0;
+  aspect-ratio: 3 / 4;
+  border-radius: clamp(24px, 6vw, 32px);
   overflow: hidden;
+  box-shadow: 0 34px 86px rgba(255, 162, 210, 0.32);
 }
 
 .productImageWrap img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transform: scale(1.05);
 }
 
-.sectorBadge {
+.productImageWrap::after {
+  content: "";
   position: absolute;
-  top: 1rem;
-  left: 1rem;
-  padding: 0.4rem 0.8rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.88);
-  color: #b10059;
-  font-weight: 600;
-  font-size: 0.85rem;
+  inset: auto 0 0 0;
+  height: 48%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(255, 140, 185, 0.55) 100%);
 }
 
 .productBody {
-  padding: 0 1.75rem;
+  padding: clamp(1.4rem, 4.4vw, 2rem) clamp(1.4rem, 4.6vw, 2.4rem) clamp(1.8rem, 5.6vw, 2.4rem);
   display: grid;
-  gap: 0.65rem;
+  gap: clamp(0.6rem, 2vw, 1rem);
+  text-align: left;
 }
 
 .productBody h2 {
   margin: 0;
-  font-size: 1.35rem;
-  color: #b10059;
 }
 
-.productBody p {
+.productTitleButton {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: clamp(0.55rem, 2vw, 0.85rem) clamp(1rem, 3vw, 1.4rem);
+  border-radius: clamp(16px, 3.6vw, 22px);
+  border: none;
+  background: linear-gradient(140deg, rgba(255, 255, 255, 0.95), rgba(255, 195, 216, 0.7));
+  box-shadow: 0 26px 62px rgba(255, 160, 205, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  color: rgba(135, 46, 80, 0.92);
+  font-size: clamp(1.3rem, 3.2vw, 1.8rem);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.productTitleButton span:first-child {
+  flex: 1;
+}
+
+.productTitleButton:focus-visible {
+  outline: 2px solid rgba(255, 94, 134, 0.6);
+  outline-offset: 4px;
+}
+
+.productTitleButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 32px 74px rgba(255, 168, 212, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.88);
+}
+
+.productTitleOpen {
+  box-shadow: 0 30px 70px rgba(255, 170, 214, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.productTitleIcon {
+  font-size: 1rem;
+  color: rgba(255, 104, 156, 0.7);
+  transition: transform 0.25s ease;
+}
+
+.productTitleOpen .productTitleIcon {
+  transform: rotate(-180deg);
+}
+
+.productDescription {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  padding: 0 clamp(0.2rem, 2vw, 0.6rem);
+  transition: max-height 0.35s ease, opacity 0.3s ease, padding 0.35s ease;
+}
+
+.productDescription p {
   margin: 0;
-  color: rgba(17, 24, 39, 0.7);
+  padding: 0.35rem 0.1rem 0;
+  color: rgba(138, 48, 86, 0.72);
   font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.descriptionOpen {
+  max-height: 320px;
+  opacity: 1;
+  padding-top: clamp(0.45rem, 1.8vw, 0.9rem);
 }
 
 .priceTag {
   font-weight: 700;
-  font-size: 1.25rem;
-  color: #111827;
+  font-size: clamp(1.2rem, 3vw, 1.5rem);
+  color: #ff5e86;
 }
 
-.swipeOverlay {
-  position: absolute;
-  bottom: 1.4rem;
-  left: 50%;
-  transform: translateX(-50%);
-  display: inline-flex;
-  gap: 1.4rem;
+.controlDock {
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: clamp(1.6rem, 8vw, 3.4rem);
+  padding: 0 clamp(1.2rem, 6vw, 2.2rem) clamp(0.6rem, 4vw, 1rem);
+}
+
+.controlGroup {
+  display: grid;
+  gap: 0.6rem;
+  justify-items: center;
+  text-align: center;
+}
+
+.controlPenalty {
+  padding: 0.35rem 1rem;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.82);
+  color: #f9fafb;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  box-shadow: 0 18px 36px rgba(17, 24, 39, 0.28);
 }
 
 .controlButton {
-  width: 72px;
-  height: 72px;
+  position: relative;
+  width: clamp(82px, 24vw, 118px);
+  aspect-ratio: 1 / 1;
   border-radius: 50%;
   border: none;
-  font-size: 1.8rem;
   display: grid;
   place-items: center;
-  color: white;
+  font-size: clamp(1.8rem, 6vw, 2.2rem);
+  color: #fff;
   cursor: pointer;
-  box-shadow: 0 20px 48px rgba(20, 30, 55, 0.28);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, filter 0.25s ease;
+  overflow: hidden;
+  isolation: isolate;
 }
 
-.controlButton:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  box-shadow: none;
+.controlButton::before {
+  content: "";
+  position: absolute;
+  inset: -12%;
+  border-radius: inherit;
+  background: radial-gradient(circle at 50% 15%, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 65%);
+  z-index: 1;
+  opacity: 0.9;
+}
+
+.controlButton::after {
+  content: "";
+  position: absolute;
+  inset: -35%;
+  border-radius: inherit;
+  z-index: -1;
+  filter: blur(22px);
 }
 
 .controlButton:hover:not(:disabled),
 .controlButton:focus-visible:not(:disabled) {
-  transform: translateY(-3px);
+  transform: translateY(-6px) scale(1.04);
 }
 
-.reject {
-  background: linear-gradient(135deg, #ff6b7b 0%, #ff416d 100%);
+.controlButton:active:not(:disabled) {
+  transform: translateY(-2px) scale(0.97);
 }
 
-.keep {
-  background: linear-gradient(135deg, #3ac7a5 0%, #1abc9c 100%);
+.controlButton:disabled {
+  filter: grayscale(0.35) saturate(60%);
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.controlButton:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.8);
+  outline-offset: 6px;
+}
+
+.controlIcon {
+  position: relative;
+  z-index: 2;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.35));
+}
+
+.controlLabel {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: rgba(17, 24, 39, 0.75);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.controlReject {
+  background: linear-gradient(160deg, rgba(24, 32, 52, 0.95), rgba(55, 65, 81, 0.85));
+  box-shadow: 0 36px 90px rgba(17, 24, 39, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.controlReject::after {
+  background: radial-gradient(circle, rgba(17, 24, 39, 0.6), rgba(17, 24, 39, 0));
+}
+
+.controlKeep {
+  background: linear-gradient(160deg, #ff6b88, #ff9d6f, #ffd9a6);
+  box-shadow: 0 38px 95px rgba(255, 149, 190, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.controlKeep::after {
+  background: radial-gradient(circle, rgba(255, 149, 190, 0.65), rgba(255, 149, 190, 0));
 }
 
 .summaryList {
@@ -409,16 +821,16 @@
   display: flex;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.75rem 1rem;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.85);
-  box-shadow: inset 0 0 0 1px rgba(177, 0, 89, 0.08);
+  padding: 0.85rem 1.1rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: inset 0 0 0 1px rgba(255, 149, 190, 0.16);
 }
 
 .summaryList h3 {
   margin: 0 0 0.35rem;
   font-size: 1rem;
-  color: #b10059;
+  color: #ff5e86;
 }
 
 .summaryList p {
@@ -434,24 +846,26 @@
 
 .summaryActions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 1rem;
 }
 
-.summaryActions button {
+.summaryActions button:not(.glowButton) {
   border-radius: 999px;
   padding: 0.75rem 1.6rem;
   border: none;
   font-weight: 600;
   cursor: pointer;
-  background: rgba(177, 0, 89, 0.12);
-  color: #b10059;
-  transition: transform 0.2s ease;
+  background: rgba(255, 149, 190, 0.2);
+  color: #ff5e86;
+  transition: transform 0.2s ease, background 0.2s ease;
 }
 
-.summaryActions button:hover:not(:disabled),
-.summaryActions button:focus-visible:not(:disabled) {
+.summaryActions button:not(.glowButton):hover:not(:disabled),
+.summaryActions button:not(.glowButton):focus-visible:not(:disabled) {
   transform: translateY(-2px);
+  background: rgba(255, 149, 190, 0.28);
 }
 
 .summaryActions button:disabled {
@@ -462,7 +876,7 @@
 .savings {
   margin: 0;
   font-weight: 600;
-  color: #b10059;
+  color: #ff5e86;
 }
 
 .attempts {
@@ -474,7 +888,68 @@
 .error {
   margin: 0;
   font-weight: 600;
-  color: #ff416d;
+  color: #ff3d6b;
+}
+
+@keyframes cardKeepExit {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  40% {
+    transform: translate3d(12px, -12px, 0) rotate(4deg) scale(1.02);
+    opacity: 1;
+  }
+  70% {
+    transform: translate3d(140px, -18px, 0) rotate(9deg) scale(1.04);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate3d(260px, -10px, 0) rotate(14deg) scale(0.94);
+    opacity: 0;
+  }
+}
+
+@keyframes cardAuraBloom {
+  0% {
+    opacity: 0.55;
+    transform: scale(0.8);
+    filter: blur(20px);
+  }
+  45% {
+    opacity: 0.95;
+    transform: scale(1.05);
+    filter: blur(26px);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.35);
+    filter: blur(36px);
+  }
+}
+
+@keyframes cardRejectCrumple {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+    opacity: 1;
+    filter: blur(0);
+  }
+  30% {
+    transform: translate3d(-14px, -8px, 0) rotate(-6deg) scale(0.96);
+  }
+  55% {
+    transform: translate3d(18px, 12px, 0) rotate(8deg) scale(0.88);
+  }
+  80% {
+    transform: translate3d(-48px, 36px, 0) rotate(-18deg) scale(0.62);
+    filter: blur(4px);
+    opacity: 0.7;
+  }
+  100% {
+    transform: translate3d(-160px, 140px, 0) rotate(-26deg) scale(0.48);
+    opacity: 0;
+    filter: blur(8px);
+  }
 }
 
 .form {
@@ -485,7 +960,7 @@
 
 .formRow {
   display: grid;
-  gap: 0.45rem;
+  gap: 0.5rem;
 }
 
 .formGroup {
@@ -495,17 +970,18 @@
 
 .form label {
   font-weight: 600;
-  color: #b10059;
+  color: #ff5e86;
 }
 
 .form input,
 .form textarea {
   border-radius: 14px;
-  border: 1px solid rgba(177, 0, 89, 0.18);
-  padding: 0.75rem 0.9rem;
+  border: 1px solid rgba(255, 149, 190, 0.26);
+  padding: 0.8rem 0.95rem;
   font: inherit;
   background: rgba(255, 255, 255, 0.96);
   resize: vertical;
+  box-shadow: inset 0 1px 2px rgba(17, 24, 39, 0.06);
 }
 
 .form textarea {
@@ -514,64 +990,206 @@
 
 .form input:focus-visible,
 .form textarea:focus-visible {
-  outline: 2px solid rgba(177, 0, 89, 0.3);
-  border-color: rgba(177, 0, 89, 0.4);
+  outline: 2px solid rgba(255, 149, 190, 0.35);
+  border-color: rgba(255, 149, 190, 0.45);
 }
 
 .successBox {
-  padding: 1.2rem 1.4rem;
-  border-radius: 18px;
-  background: rgba(58, 199, 165, 0.15);
-  color: #145246;
+  padding: 1.3rem 1.5rem;
+  border-radius: 20px;
+  background: rgba(58, 199, 165, 0.18);
+  color: #125f4f;
   font-weight: 500;
 }
 
 @media (max-width: 960px) {
-  .swipeOverlay {
-    gap: 1rem;
-    bottom: 1rem;
+  .playStage {
+    padding: clamp(0.75rem, 3vw, 1.8rem) clamp(0.6rem, 4vw, 1.4rem) clamp(1.4rem, 6vw, 2.2rem);
   }
 
-  .controlButton {
-    width: 62px;
-    height: 62px;
+  .timerWrap {
+    max-width: min(640px, 100%);
   }
 }
 
 @media (max-width: 720px) {
   .page {
-    padding: 2rem 1rem 3rem;
+    padding: 1.4rem 0.75rem 1.8rem;
   }
 
   .toast {
-    width: calc(100% - 2rem);
-    max-width: 420px;
+    width: calc(100% - 1.5rem);
+    max-width: 400px;
   }
 
   .playground {
-    gap: 1.4rem;
+    gap: 1.2rem;
+    padding: 0;
+  }
+
+  .playStage {
+    padding: 0;
+  }
+
+  .timerWrap {
+    gap: 0.8rem;
+    padding: clamp(0.8rem, 4vw, 1.2rem) clamp(0.85rem, 6vw, 1.6rem);
+  }
+
+  .timerStats {
+    grid-template-columns: 1fr;
+    gap: clamp(0.7rem, 4vw, 1.1rem);
+  }
+
+  .timerStat {
+    text-align: center;
+  }
+
+  .statLabel {
+    font-size: 0.7rem;
+  }
+
+  .playBody {
+    padding: clamp(0.75rem, 5vw, 1.2rem) clamp(0.7rem, 5vw, 1.1rem) clamp(1.4rem, 6vw, 2.2rem);
+    min-height: clamp(320px, 58vh, 460px);
+  }
+
+  .cardStage {
+    width: min(100%, clamp(300px, 94vw, 600px));
+    gap: clamp(1rem, 5vw, 1.6rem);
   }
 
   .productBody {
-    padding: 0 1.25rem;
+    padding: 0 clamp(1rem, 7vw, 1.6rem) clamp(0.9rem, 6vw, 1.4rem);
+    gap: 0.65rem;
+  }
+
+  .productBody h2 {
+    font-size: clamp(1.25rem, 6vw, 1.52rem);
+  }
+
+  .productBody p {
+    font-size: 0.9rem;
+  }
+
+  .controlDock {
+    gap: clamp(1rem, 8vw, 1.6rem);
+    padding: 0 clamp(0.5rem, 7vw, 1rem) clamp(0.2rem, 4vw, 0.6rem);
+  }
+
+  .controlButton {
+    width: clamp(68px, 26vw, 90px);
+  }
+
+  .controlLabel {
+    font-size: 0.78rem;
   }
 
   .summaryList {
-    max-height: 260px;
+    max-height: 240px;
   }
 }
 
 @media (max-width: 520px) {
   .stepCard {
-    padding: 1.75rem 1.4rem;
+    padding: 1.85rem 1.5rem;
   }
 
-  .ticketCard button {
-    flex-direction: column;
-    align-items: flex-start;
+  .ticketBody button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .tierRibbon {
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+  }
+
+  .playStage {
+    padding: 0;
+  }
+
+  .cardStage {
+    width: min(100%, clamp(280px, 92vw, 520px));
+    gap: clamp(1rem, 5vw, 1.6rem);
+  }
+
+  .timerWrap {
+    gap: 0.7rem;
+    padding: clamp(0.85rem, 5vw, 1.2rem) clamp(0.8rem, 7vw, 1.6rem);
+  }
+
+  .timerStats {
+    gap: clamp(0.6rem, 4vw, 0.9rem);
+  }
+
+  .timerStat {
+    padding: clamp(0.65rem, 4.5vw, 1rem) clamp(0.85rem, 5.5vw, 1.2rem);
+  }
+
+  .cardStage::before {
+    content: "";
+    position: absolute;
+    inset: auto clamp(12%, 18vw, 26%) -18% clamp(12%, 18vw, 26%);
+    height: clamp(64px, 18vw, 96px);
+    border-radius: 40%;
+    background: radial-gradient(circle, rgba(255, 149, 190, 0.35), rgba(255, 149, 190, 0));
+    filter: blur(18px);
+    opacity: 0.65;
+    z-index: 0;
   }
 
   .productCard {
-    padding-bottom: 0;
+    padding-bottom: clamp(1.7rem, 10vw, 2.4rem);
+    border-radius: 28px;
+    box-shadow: 0 42px 86px rgba(255, 149, 190, 0.32), 0 22px 46px rgba(17, 24, 39, 0.26);
+  }
+
+  .cardAura {
+    inset: 18% 16% 18%;
+    filter: blur(16px);
+  }
+
+  .productImageWrap {
+    aspect-ratio: 9 / 10;
+  }
+
+  .sectorBadge {
+    top: 1rem;
+    left: 1rem;
+    font-size: 0.75rem;
+    padding: 0.45rem 0.95rem;
+  }
+
+  .productBody {
+    padding: 0 clamp(1rem, 7vw, 1.6rem) clamp(0.9rem, 6vw, 1.3rem);
+    gap: 0.6rem;
+  }
+
+  .productBody h2 {
+    font-size: clamp(1.18rem, 6.4vw, 1.45rem);
+  }
+
+  .productBody p {
+    font-size: 0.88rem;
+    line-height: 1.5;
+  }
+
+  .priceTag {
+    font-size: clamp(1.15rem, 6vw, 1.35rem);
+  }
+
+  .controlDock {
+    gap: clamp(0.9rem, 8vw, 1.4rem);
+    padding: 0 clamp(0.35rem, 6vw, 0.9rem) clamp(0.15rem, 4vw, 0.45rem);
+  }
+
+  .controlButton {
+    width: clamp(62px, 34vw, 84px);
+    font-size: clamp(1.4rem, 8.5vw, 1.8rem);
+  }
+
+  .controlPenalty {
+    font-size: 0.66rem;
   }
 }
