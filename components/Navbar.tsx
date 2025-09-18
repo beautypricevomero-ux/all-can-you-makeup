@@ -12,7 +12,6 @@ export default function Navbar() {
       <Link href="/">🏠 Home</Link>
       <div style={{ display: "flex", gap: 16 }}>
         <Link href="/play">Gioca</Link>
-        <Link href="/settings">Settings</Link>
       </div>
     </nav>
   );
