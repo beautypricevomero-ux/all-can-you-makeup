@@ -702,8 +702,10 @@ export default function PlayPage() {
                 </summary>
                 <div className={styles.ticketBody}>
                   <p>
-                    Ideale per esplorare i settori Low Cost, Low Cost Plus, Semi Luxury, Luxury ed Extra Luxury con tempo dedicato a
-                    riempire il carrello.
+                    <strong>Regole del gioco:</strong> hai {tier.secs} secondi per mettere nel carrello tutto quello che riesci.
+                    Il valore finale dovrà restare tra il 200% e il 250% del prezzo del biglietto. Ogni prodotto toglie 30 secondi,
+                    ma quelli con il badge «+20 sec bonus» ti costano solo 10 secondi. Muoviti veloce: nessuna categoria è fuori
+                    portata, se giochi bene puoi davvero portare a casa qualsiasi cosa.
                   </p>
                   {paidTickets.has(tier.id) ? <span className={styles.ticketBadge}>Biglietto già acquistato</span> : null}
                   <button
