@@ -6,7 +6,6 @@ export default function Navbar() {
         <Link href="/" className="font-semibold">Can You Makeup</Link>
         <nav className="flex gap-4">
           <Link href="/play">Gioca</Link>
-          <Link href="/settings">Settings</Link>
         </nav>
       </div>
     </header>
