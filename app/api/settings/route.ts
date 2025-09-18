@@ -3,10 +3,10 @@ import type { NextRequest } from "next/server";
 
 let SETTINGS = {
   tiers: [
-    { id: "t30", label: "Biglietto 30€", fee: 30, secs: 120 },
-    { id: "t50", label: "Biglietto 50€", fee: 50, secs: 200 },
-    { id: "t80", label: "Biglietto 80€", fee: 80, secs: 350 },
-    { id: "t100", label: "Biglietto 100€", fee: 100, secs: 500 },
+    { id: "t30", label: "Biglietto 30€", fee: 30, secs: 360 },
+    { id: "t50", label: "Biglietto 50€", fee: 50, secs: 600 },
+    { id: "t80", label: "Biglietto 80€", fee: 80, secs: 1050 },
+    { id: "t100", label: "Biglietto 100€", fee: 100, secs: 1500 },
   ],
   sectorsByTier: {
     t30: [

@@ -702,10 +702,9 @@ export default function PlayPage() {
                 </summary>
                 <div className={styles.ticketBody}>
                   <p>
-                    <strong>Regole del gioco:</strong> hai {tier.secs} secondi per mettere nel carrello tutto quello che riesci.
-                    Il valore finale dovrà restare tra il 200% e il 250% del prezzo del biglietto. Ogni prodotto toglie 30 secondi,
-                    ma quelli con il badge «+20 sec bonus» ti costano solo 10 secondi. Muoviti veloce: nessuna categoria è fuori
-                    portata, se giochi bene puoi davvero portare a casa qualsiasi cosa.
+                    <strong>Regole del gioco:</strong> hai {tier.secs} secondi per riempire il carrello con tutto ciò che desideri.
+                    Ogni prodotto toglie 30 secondi, ma quelli con il badge «+20 sec bonus» ne consumano soltanto 10. Il catalogo è
+                    calibrato sul tuo biglietto: sfrutta il tempo, punta in alto e trasforma ogni scelta nel bottino perfetto.
                   </p>
                   {paidTickets.has(tier.id) ? <span className={styles.ticketBadge}>Biglietto già acquistato</span> : null}
                   <button
