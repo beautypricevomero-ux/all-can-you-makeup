@@ -26,13 +26,20 @@ type ActionToast = {
 type CheckoutFormData = { name: string; email: string; cardNumber: string; expiry: string; cvv: string };
 type CheckoutState = "idle" | "processing" | "error";
 type ShippingForm = { fullName: string; address: string; city: string; zip: string; notes: string };
-type PriceGuide = { preferred: number; fallback: number; floor: number };
+type PriceGuide = {
+  target: number;
+  min: number;
+  max: number;
+  window: number;
+  cap: number;
+};
 
 type PriceGuideInput = {
   limit: number;
   cartValue: number;
   secondsLeft: number;
   totalSeconds: number;
+  ticketPrice: number;
 };
 
 const REJECT_PENALTY_SECONDS = 10;
@@ -57,23 +64,90 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function createPriceGuide({ limit, cartValue, secondsLeft, totalSeconds }: PriceGuideInput): PriceGuide {
-  const safeLimit = limit > 0 ? limit : 1;
-  const remaining = limit - cartValue;
-  const timeRatio = totalSeconds > 0 ? secondsLeft / totalSeconds : 0;
-  const spendProgress = limit > 0 ? cartValue / limit : 0;
-  const idealProgress = 1 - timeRatio;
-  const paceDelta = clamp(spendProgress - idealProgress, -1, 1);
-  const baseAllowance = Math.max(remaining, 0);
-  const timeAllowance = safeLimit * (0.1 + (1 - timeRatio) * 0.15);
-  const correction =
-    paceDelta >= 0 ? -safeLimit * paceDelta * 0.4 : safeLimit * Math.abs(paceDelta) * 0.28;
-  const preferredRaw = baseAllowance + timeAllowance + correction;
-  const preferred = Math.max(safeLimit * 0.06, preferredRaw);
-  const fallback = Math.max(preferred + safeLimit * (0.12 + timeRatio * 0.05), safeLimit * 0.18);
-  const floorBase = Math.max(0, Math.min(safeLimit * 0.2, baseAllowance * 0.6 + safeLimit * 0.04));
-  const floor = Math.min(floorBase, preferred);
-  return { preferred, fallback: Math.max(fallback, preferred + safeLimit * 0.05), floor };
+function createPriceGuide({
+  limit,
+  cartValue,
+  secondsLeft,
+  totalSeconds,
+  ticketPrice,
+}: PriceGuideInput): PriceGuide {
+  const baseTicket = ticketPrice > 0 ? ticketPrice : limit > 0 ? limit / 2.2 : 50;
+  const minRange = baseTicket * 2;
+  const maxRange = baseTicket * 2.5;
+  const clampedLimit = limit > 0 ? Math.min(Math.max(minRange, limit), maxRange) : maxRange;
+  const cappedCartValue = Math.min(cartValue, clampedLimit);
+  const remainingToCap = Math.max(0, clampedLimit - cappedCartValue);
+  const remainingToMin = Math.max(0, minRange - cappedCartValue);
+  const safeSeconds = Math.max(0, secondsLeft);
+  const rawKeepSlots = Math.max(1, Math.floor(safeSeconds / KEEP_PENALTY_SECONDS));
+  const expectedKeepSlots = Math.max(
+    1,
+    Math.round(safeSeconds / (KEEP_PENALTY_SECONDS + REJECT_PENALTY_SECONDS))
+  );
+  const alreadyInRange = cappedCartValue >= minRange;
+  const shouldCompress =
+    alreadyInRange &&
+    (rawKeepSlots <= 2 || remainingToCap <= baseTicket * 0.35 || remainingToMin === 0);
+  const distributionSlots = shouldCompress ? Math.max(1, rawKeepSlots - 1) : rawKeepSlots;
+  const urgency = totalSeconds > 0 ? 1 - safeSeconds / totalSeconds : 1;
+
+  let target: number;
+  if (remainingToCap > 0) {
+    target = remainingToCap / Math.max(1, distributionSlots);
+    const slotPressure =
+      distributionSlots <= 1 ? 1 : distributionSlots === 2 ? 0.82 : 0.75;
+    target *= 1 + urgency * slotPressure;
+
+    if (remainingToMin > 0) {
+      const minShare = remainingToMin / Math.max(1, expectedKeepSlots);
+      target = Math.max(target, minShare * (1 + urgency * 0.4));
+    }
+
+    const baselineTarget = Math.min(remainingToCap, baseTicket * 0.3);
+    target = Math.max(target, baselineTarget);
+
+    const lowerClamp = Math.max(
+      1,
+      remainingToCap * 0.12,
+      remainingToMin > 0 ? remainingToMin / Math.max(1, rawKeepSlots * 1.5) : 0
+    );
+    target = clamp(target, lowerClamp, remainingToCap);
+  } else {
+    target = Math.max(1, baseTicket * 0.2);
+  }
+
+  const windowBase =
+    distributionSlots <= 1
+      ? Math.max(target * 0.35, baseTicket * 0.08, 2.5)
+      : Math.max(target * 0.5, baseTicket * 0.1, 3);
+
+  const minBound = Math.max(
+    1,
+    remainingToMin > 0
+      ? Math.min(target, remainingToMin / Math.max(1, rawKeepSlots))
+      : remainingToCap * 0.05
+  );
+
+  const min = clamp(target - windowBase, minBound, remainingToCap > 0 ? remainingToCap : target);
+  const max = clamp(
+    target + windowBase,
+    Math.max(min + 0.5, target),
+    remainingToCap > 0 ? remainingToCap : target + windowBase
+  );
+
+  const adjustedTarget = clamp(
+    target,
+    min,
+    Math.max(min + 0.5, Math.min(max, remainingToCap > 0 ? remainingToCap : target))
+  );
+
+  return {
+    target: adjustedTarget,
+    min,
+    max,
+    window: windowBase,
+    cap: remainingToCap > 0 ? remainingToCap : Math.max(adjustedTarget + windowBase, baseTicket * 0.25),
+  };
 }
 
 function parsePrice(product: Product): number {
@@ -131,34 +205,37 @@ function selectNextProduct(
   if (available.length === 0) return null;
   let candidatePool = available;
   if (guide) {
-    const floorThreshold = Math.max(0, guide.floor - 1e-2);
     const priced = available
       .map((item) => ({ item, price: parsePrice(item) }))
+      .filter(({ price }) => price >= 0)
       .sort((a, b) => a.price - b.price);
-    const withinPreferred = priced.filter(
-      ({ price }) => price >= floorThreshold && price <= guide.preferred + 1e-2
-    );
-    if (withinPreferred.length > 0) {
-      candidatePool = withinPreferred.map((entry) => entry.item);
-    } else {
-      const withinFallback = priced.filter(
-        ({ price }) => price >= floorThreshold && price <= guide.fallback + 1e-2
-      );
-      if (withinFallback.length > 0) {
-        withinFallback.sort(
-          (a, b) =>
-            Math.abs(a.price - guide.preferred) - Math.abs(b.price - guide.preferred)
-        );
-        const trimmed = withinFallback.slice(0, Math.max(1, Math.ceil(withinFallback.length * 0.6)));
-        candidatePool = trimmed.map((entry) => entry.item);
-      } else {
-        const sliceCount = Math.max(1, Math.ceil(priced.length * 0.4));
-        const trimmed = priced
-          .filter(({ price }) => price >= floorThreshold)
-          .slice(0, sliceCount);
-        candidatePool = trimmed.length > 0 ? trimmed.map((entry) => entry.item) : available;
+    const capThreshold = guide.cap + 1e-2;
+    const withinCap = priced.filter(({ price }) => price <= capThreshold);
+
+    const gatherWithinRange = (min: number, max: number) =>
+      withinCap.filter(({ price }) => price >= min - 1e-2 && price <= max + 1e-2);
+
+    let scoped = gatherWithinRange(guide.min, guide.max);
+    if (scoped.length === 0) {
+      for (let step = 1; step <= 3 && scoped.length === 0; step += 1) {
+        const rangeMin = Math.max(0, guide.min - guide.window * step);
+        const rangeMax = Math.min(capThreshold, guide.max + guide.window * step);
+        scoped = gatherWithinRange(rangeMin, rangeMax);
       }
     }
+
+    if (scoped.length === 0) {
+      scoped = withinCap.length > 0 ? withinCap : priced;
+    }
+
+    scoped.sort((a, b) => {
+      const diff = Math.abs(a.price - guide.target) - Math.abs(b.price - guide.target);
+      if (Math.abs(diff) > 1e-6) return diff;
+      return a.price - b.price;
+    });
+
+    const selectionCount = Math.max(1, Math.min(scoped.length, Math.ceil(scoped.length * 0.6)));
+    candidatePool = scoped.slice(0, selectionCount).map((entry) => entry.item);
   }
   if (candidatePool.length === 0) return null;
   if (sectors.length === 0) return candidatePool[0];
@@ -518,6 +595,7 @@ export default function PlayPage() {
           cartValue: 0,
           secondsLeft: tier.secs,
           totalSeconds: tier.secs,
+          ticketPrice: tier.fee,
         });
         const next = selectNextProduct(products, [], sectors, priceGuide);
         if (next) {
@@ -628,6 +706,7 @@ export default function PlayPage() {
       cartValue,
       secondsLeft: projectedSeconds,
       totalSeconds: activeTier.secs,
+      ticketPrice: activeTier.fee,
     });
     const nextProduct = selectNextProduct(pool, nextPicked, sectors, priceGuide);
     if (nextProduct) {
@@ -673,6 +752,7 @@ export default function PlayPage() {
       cartValue: updatedCartValue,
       secondsLeft: projectedSeconds,
       totalSeconds: activeTier.secs,
+      ticketPrice: activeTier.fee,
     });
     const nextProduct = selectNextProduct(pool, nextPicked, sectors, priceGuide);
     if (nextProduct) {
